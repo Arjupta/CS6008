@@ -7,19 +7,27 @@
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
+#define MAX_CLIENTS 2
+#define USERNAME_SIZE 32
+
+typedef struct {
+    int socket;
+    char username[USERNAME_SIZE];
+} Client;
 
 int main() {
     int server_fd;
-    int client_fd;
-
     struct sockaddr_in server_addr;
-    struct sockaddr_in client_addr;
 
-    socklen_t client_len = sizeof(client_addr);
+    Client clients[MAX_CLIENTS];
 
-    char buffer[BUFFER_SIZE];
+    // Initialize client slots
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients[i].socket = -1;
+        clients[i].username[0] = '\0';
+    }
 
-    // 1. Create the socket
+    // Create TCP socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (server_fd < 0) {
@@ -27,16 +35,18 @@ int main() {
         return 1;
     }
 
-    printf("Socket created.\n");
+    // Allow quick reuse of the port
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // 2. Configure server address
+    // Configure server address
     memset(&server_addr, 0, sizeof(server_addr));
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    // 3. Bind socket to address and port
+    // Bind
     if (bind(server_fd,
              (struct sockaddr *)&server_addr,
              sizeof(server_addr)) < 0) {
@@ -45,10 +55,8 @@ int main() {
         return 1;
     }
 
-    printf("Bound to port %d.\n", PORT);
-
-    // 4. Start listening
-    if (listen(server_fd, 10) < 0) {
+    // Listen
+    if (listen(server_fd, MAX_CLIENTS) < 0) {
         perror("listen");
         close(server_fd);
         return 1;
@@ -56,36 +64,49 @@ int main() {
 
     printf("Server listening on port %d...\n", PORT);
 
-    // 5. Accept one client
-    client_fd = accept(server_fd,
-                       (struct sockaddr *)&client_addr,
-                       &client_len);
+        // Accept clients
+    while (1) {
+        int client_fd;
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
 
-    if (client_fd < 0) {
-        perror("accept");
-        close(server_fd);
-        return 1;
+        client_fd = accept(server_fd,
+                           (struct sockaddr *)&client_addr,
+                           &client_len);
+
+        if (client_fd < 0) {
+            perror("accept");
+            continue;
+        }
+
+        // Find an empty client slot
+        int slot = -1;
+
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i].socket == -1) {
+                slot = i;
+                break;
+            }
+        }
+
+        if (slot == -1) {
+            printf("Maximum number of clients reached.\n");
+            close(client_fd);
+            continue;
+        }
+
+        clients[slot].socket = client_fd;
+
+        // Temporary username
+        snprintf(clients[slot].username,
+                 USERNAME_SIZE,
+                 "client%d",
+                 slot + 1);
+
+        printf("Client connected: %s\n",
+               clients[slot].username);
     }
 
-    printf("Client connected.\n");
-
-    // 6. Receive a message
-    int bytes_received = recv(client_fd,
-                              buffer,
-                              BUFFER_SIZE - 1,
-                              0);
-
-    if (bytes_received < 0) {
-        perror("recv");
-    } else {
-        buffer[bytes_received] = '\0';
-
-        printf("Client says: %s\n", buffer);
-    }
-
-    // 7. Close connections
-    close(client_fd);
     close(server_fd);
-
     return 0;
 }
