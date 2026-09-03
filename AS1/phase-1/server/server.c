@@ -126,10 +126,29 @@ int main() {
             } else {
                 clients[slot].socket = client_fd;
 
-                snprintf(clients[slot].username,
-                        USERNAME_SIZE,
-                        "client%d",
-                        slot + 1);
+                char username[USERNAME_SIZE];
+
+                int bytes_received = recv(client_fd,
+                                        username,
+                                        USERNAME_SIZE - 1,
+                                        0);
+
+                if (bytes_received <= 0) {
+                    close(client_fd);
+                    clients[slot].socket = -1;
+                    continue;
+                }
+
+                username[bytes_received] = '\0';
+
+                // Remove newline if present
+                username[strcspn(username, "\n")] = '\0';
+
+                strncpy(clients[slot].username,
+                        username,
+                        USERNAME_SIZE - 1);
+
+                clients[slot].username[USERNAME_SIZE - 1] = '\0';
 
                 printf("Client connected: %s\n",
                     clients[slot].username);

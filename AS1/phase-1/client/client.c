@@ -45,6 +45,27 @@ int main() {
 
     printf("Connected to server.\n");
 
+    char username[BUFFER_SIZE];
+
+    printf("Enter username: ");
+
+    if (fgets(username, BUFFER_SIZE, stdin) == NULL) {
+        close(sockfd);
+        return 1;
+    }
+
+    // Remove newline
+    username[strcspn(username, "\n")] = '\0';
+
+    if (send(sockfd,
+            username,
+            strlen(username),
+            0) < 0) {
+        perror("send");
+        close(sockfd);
+        return 1;
+    }
+
     // Continuously monitor keyboard and socket
     while (1) {
 
