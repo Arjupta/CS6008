@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 
 #define SERVER_IP "192.168.56.10"
 #define PORT 5000
@@ -12,9 +13,8 @@
 int main() {
     int sockfd;
     struct sockaddr_in server_addr;
-    char message[BUFFER_SIZE];
 
-    // 1. Create socket
+    // Create socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (sockfd < 0) {
@@ -22,7 +22,7 @@ int main() {
         return 1;
     }
 
-    // 2. Configure server address
+    // Configure server address
     memset(&server_addr, 0, sizeof(server_addr));
 
     server_addr.sin_family = AF_INET;
@@ -34,7 +34,7 @@ int main() {
         return 1;
     }
 
-    // 3. Connect to server
+    // Connect to server
     if (connect(sockfd,
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)) < 0) {
@@ -45,27 +45,77 @@ int main() {
 
     printf("Connected to server.\n");
 
-    // 4. Read a message from the user
-    printf("Enter message: ");
+    // Continuously monitor keyboard and socket
+    while (1) {
 
-    if (fgets(message, BUFFER_SIZE, stdin) == NULL) {
-        close(sockfd);
-        return 1;
+        fd_set readfds;
+
+        FD_ZERO(&readfds);
+
+        // Monitor keyboard input
+        FD_SET(STDIN_FILENO, &readfds);
+
+        // Monitor server socket
+        FD_SET(sockfd, &readfds);
+
+        int max_fd = sockfd;
+
+        if (STDIN_FILENO > max_fd) {
+            max_fd = STDIN_FILENO;
+        }
+
+        // Wait until keyboard or socket has data
+        int activity = select(max_fd + 1,
+                              &readfds,
+                              NULL,
+                              NULL,
+                              NULL);
+
+        if (activity < 0) {
+            perror("select");
+            break;
+        }
+
+        // Check keyboard
+        if (FD_ISSET(STDIN_FILENO, &readfds)) {
+
+            char message[BUFFER_SIZE];
+
+            if (fgets(message, BUFFER_SIZE, stdin) == NULL) {
+                break;
+            }
+
+            if (send(sockfd,
+                     message,
+                     strlen(message),
+                     0) < 0) {
+                perror("send");
+                break;
+            }
+        }
+
+        // Check server socket
+        if (FD_ISSET(sockfd, &readfds)) {
+
+            char buffer[BUFFER_SIZE];
+
+            int bytes_received = recv(sockfd,
+                                      buffer,
+                                      BUFFER_SIZE - 1,
+                                      0);
+
+            if (bytes_received <= 0) {
+                printf("Server disconnected.\n");
+                break;
+            }
+
+            buffer[bytes_received] = '\0';
+
+            printf("Received: %s", buffer);
+            fflush(stdout);
+        }
     }
 
-    // 5. Send message
-    if (send(sockfd,
-             message,
-             strlen(message),
-             0) < 0) {
-        perror("send");
-        close(sockfd);
-        return 1;
-    }
-
-    printf("Message sent.\n");
-
-    // 6. Close socket
     close(sockfd);
 
     return 0;

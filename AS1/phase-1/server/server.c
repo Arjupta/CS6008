@@ -169,6 +169,26 @@ int main() {
                     printf("[%s]: %s",
                         clients[i].username,
                         buffer);
+
+                    // Relay message to all other connected clients
+                    for (int j = 0; j < MAX_CLIENTS; j++) {
+
+                        // Don't send the message back to the sender
+                        if (j == i) {
+                            continue;
+                        }
+
+                        // Only send to connected clients
+                        if (clients[j].socket != -1) {
+
+                            if (send(clients[j].socket,
+                                    buffer,
+                                    bytes_received,
+                                    0) < 0) {
+                                perror("send");
+                            }
+                        }
+                    }
                 }
             }
         }
