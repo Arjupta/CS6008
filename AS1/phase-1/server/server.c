@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
@@ -64,49 +65,114 @@ int main() {
 
     printf("Server listening on port %d...\n", PORT);
 
-        // Accept clients
     while (1) {
-        int client_fd;
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
+        fd_set readfds;
 
-        client_fd = accept(server_fd,
-                           (struct sockaddr *)&client_addr,
-                           &client_len);
+        FD_ZERO(&readfds);
+        FD_SET(server_fd, &readfds);
 
-        if (client_fd < 0) {
-            perror("accept");
-            continue;
-        }
+        int max_fd = server_fd;
 
-        // Find an empty client slot
-        int slot = -1;
-
+        // Add connected clients to the set
         for (int i = 0; i < MAX_CLIENTS; i++) {
-            if (clients[i].socket == -1) {
-                slot = i;
-                break;
+            if (clients[i].socket != -1) {
+                FD_SET(clients[i].socket, &readfds);
+
+                if (clients[i].socket > max_fd) {
+                    max_fd = clients[i].socket;
+                }
             }
         }
 
-        if (slot == -1) {
-            printf("Maximum number of clients reached.\n");
-            close(client_fd);
+        // Wait until something happens
+        int activity = select(max_fd + 1,
+                            &readfds,
+                            NULL,
+                            NULL,
+                            NULL);
+
+        if (activity < 0) {
+            perror("select");
             continue;
         }
 
-        clients[slot].socket = client_fd;
+        // New client connection
+        if (FD_ISSET(server_fd, &readfds)) {
 
-        // Temporary username
-        snprintf(clients[slot].username,
-                 USERNAME_SIZE,
-                 "client%d",
-                 slot + 1);
+            struct sockaddr_in client_addr;
+            socklen_t client_len = sizeof(client_addr);
 
-        printf("Client connected: %s\n",
-               clients[slot].username);
+            int client_fd = accept(server_fd,
+                                (struct sockaddr *)&client_addr,
+                                &client_len);
+
+            if (client_fd < 0) {
+                perror("accept");
+                continue;
+            }
+
+            int slot = -1;
+
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                if (clients[i].socket == -1) {
+                    slot = i;
+                    break;
+                }
+            }
+
+            if (slot == -1) {
+                printf("Maximum number of clients reached.\n");
+                close(client_fd);
+            } else {
+                clients[slot].socket = client_fd;
+
+                snprintf(clients[slot].username,
+                        USERNAME_SIZE,
+                        "client%d",
+                        slot + 1);
+
+                printf("Client connected: %s\n",
+                    clients[slot].username);
+            }
+        }
+
+        // Check connected clients for messages
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+
+            if (clients[i].socket == -1) {
+                continue;
+            }
+
+            if (FD_ISSET(clients[i].socket, &readfds)) {
+
+                char buffer[BUFFER_SIZE];
+
+                int bytes_received = recv(
+                    clients[i].socket,
+                    buffer,
+                    BUFFER_SIZE - 1,
+                    0
+                );
+
+                if (bytes_received <= 0) {
+                    printf("%s disconnected.\n",
+                        clients[i].username);
+
+                    close(clients[i].socket);
+
+                    clients[i].socket = -1;
+                    clients[i].username[0] = '\0';
+
+                } else {
+                    buffer[bytes_received] = '\0';
+
+                    printf("[%s]: %s",
+                        clients[i].username,
+                        buffer);
+                }
+            }
+        }
     }
-
     close(server_fd);
     return 0;
 }
