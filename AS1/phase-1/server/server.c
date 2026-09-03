@@ -189,6 +189,25 @@ int main() {
                         clients[i].username,
                         buffer);
 
+                    if (strncmp(buffer, "/who", 4) == 0) {
+
+                        char response[BUFFER_SIZE] = "Online users:\n";
+
+                        for (int j = 0; j < MAX_CLIENTS; j++) {
+                            if (clients[j].socket != -1) {
+                                strcat(response, clients[j].username);
+                                strcat(response, "\n");
+                            }
+                        }
+
+                        send(clients[i].socket,
+                            response,
+                            strlen(response),
+                            0);
+
+                        continue;
+                    }
+
                     // Relay message to all other connected clients
                     for (int j = 0; j < MAX_CLIENTS; j++) {
 
