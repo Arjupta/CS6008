@@ -13,6 +13,7 @@
 
 typedef struct {
     int socket;
+    int registered;
     char username[USERNAME_SIZE];
 } Client;
 
@@ -25,6 +26,7 @@ int main() {
     // Initialize client slots
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].socket = -1;
+        clients[i].registered = 0;
         clients[i].username[0] = '\0';
     }
 
@@ -125,33 +127,10 @@ int main() {
                 close(client_fd);
             } else {
                 clients[slot].socket = client_fd;
+                clients[slot].registered = 0;
+                clients[slot].username[0] = '\0';
 
-                char username[USERNAME_SIZE];
-
-                int bytes_received = recv(client_fd,
-                                        username,
-                                        USERNAME_SIZE - 1,
-                                        0);
-
-                if (bytes_received <= 0) {
-                    close(client_fd);
-                    clients[slot].socket = -1;
-                    continue;
-                }
-
-                username[bytes_received] = '\0';
-
-                // Remove newline if present
-                username[strcspn(username, "\n")] = '\0';
-
-                strncpy(clients[slot].username,
-                        username,
-                        USERNAME_SIZE - 1);
-
-                clients[slot].username[USERNAME_SIZE - 1] = '\0';
-
-                printf("Client connected: %s\n",
-                    clients[slot].username);
+                printf("[CONNECT] New client connected.\n");
             }
         }
 
@@ -162,111 +141,119 @@ int main() {
                 continue;
             }
 
-            if (FD_ISSET(clients[i].socket, &readfds)) {
+            if (!FD_ISSET(clients[i].socket, &readfds)) {
+                continue;
+            }
 
-                char buffer[BUFFER_SIZE];
+            char buffer[BUFFER_SIZE];
 
-                int bytes_received = recv(
-                    clients[i].socket,
-                    buffer,
-                    BUFFER_SIZE - 1,
-                    0
-                );
+            int bytes_received = recv(
+                clients[i].socket,
+                buffer,
+                BUFFER_SIZE - 1,
+                0
+            );
 
-                if (bytes_received <= 0) {
-                    printf("%s disconnected.\n",
+            if (bytes_received <= 0) {
+                if (clients[i].registered) {
+                    printf("[DISCONNECT] %s disconnected.\n",
                         clients[i].username);
-
-                    close(clients[i].socket);
-
-                    clients[i].socket = -1;
-                    clients[i].username[0] = '\0';
-
                 } else {
-                    buffer[bytes_received] = '\0';
+                    printf("[DISCONNECT] Unregistered client disconnected.\n");
+                }
 
-                    buffer[strcspn(buffer, "\n")] = '\0';
+                close(clients[i].socket);
 
-                    printf("[RECEIVED] %s: %s\n",
-                        clients[i].username,
+                clients[i].socket = -1;
+                clients[i].registered = 0;
+                clients[i].username[0] = '\0';
+
+                continue;
+            }
+
+            buffer[bytes_received] = '\0';
+
+            if (!clients[i].registered) {
+
+                buffer[strcspn(buffer, "\n")] = '\0';
+
+                int duplicate = 0;
+
+                for (int j = 0; j < MAX_CLIENTS; j++) {
+
+                    if (j == i) {
+                        continue;
+                    }
+
+                    if (clients[j].socket != -1 &&
+                        clients[j].registered &&
+                        strcmp(clients[j].username, buffer) == 0) {
+
+                        duplicate = 1;
+                        break;
+                    }
+                }
+
+                if (duplicate) {
+
+                    printf("[REGISTER] Username already in use: %s\n",
                         buffer);
 
-                    if (strcmp(buffer, "/quit") == 0) {
+                    send(clients[i].socket,
+                        "USERNAME_TAKEN\n",
+                        15,
+                        0);
 
-                        printf("%s requested to quit.\n",
-                            clients[i].username);
+                    continue;
+                }
 
-                        close(clients[i].socket);
+                strncpy(clients[i].username,
+                        buffer,
+                        USERNAME_SIZE - 1);
 
-                        clients[i].socket = -1;
-                        clients[i].username[0] = '\0';
+                clients[i].username[USERNAME_SIZE - 1] = '\0';
 
-                        continue;
-                    }
+                clients[i].registered = 1;
 
-                    if (buffer[0] == '@') {
-                        char target[USERNAME_SIZE];
+                send(clients[i].socket,
+                    "USERNAME_OK\n",
+                    12,
+                    0);
 
-                        if (sscanf(buffer, "@%31s", target) == 1) {
+                printf("[REGISTER] Username registered: %s\n",
+                    clients[i].username);
 
-                            for (int j = 0; j < MAX_CLIENTS; j++) {
+                continue;
+            }
 
-                                if (clients[j].socket != -1 &&
-                                    strcmp(clients[j].username, target) == 0) {
+            printf("[MESSAGE] %s: %s",
+                clients[i].username,
+                buffer);
 
-                                    if (send(clients[j].socket,
-                                            buffer,
-                                            bytes_received,
-                                            0) < 0) {
-                                        perror("send");
-                                    }
+            if (strcmp(buffer, "/quit\n") == 0) {
 
-                                    printf("Relayed message from %s to %s: %s",
-                                        clients[i].username,
-                                        target,
-                                        buffer);
+                printf("%s requested to quit.\n",
+                    clients[i].username);
 
-                                    break;
-                                }
-                            }
-                        }
+                close(clients[i].socket);
 
-                        continue;
-                    }
+                clients[i].socket = -1;
+                clients[i].registered = 0;
+                clients[i].username[0] = '\0';
 
-                    if (strcmp(buffer, "/who") == 0) {
+                continue;
+            }
 
-                        char response[BUFFER_SIZE] = "Online users:\n";
+            if (buffer[0] == '@') {
+                char target[USERNAME_SIZE];
 
-                        for (int j = 0; j < MAX_CLIENTS; j++) {
-                            if (clients[j].socket != -1) {
-                                strcat(response, clients[j].username);
-                                strcat(response, "\n");
-                            }
-                        }
+                if (sscanf(buffer, "@%31s", target) == 1) {
 
-                        printf("[RESPONSE] Sent online users to %s\n",
-                            clients[i].username);
-                        if (send(clients[i].socket,
-                                response,
-                                strlen(response),
-                                0) < 0) {
-                            perror("send");
-                        }
-
-                        continue;
-                    }
-
-                    // Relay message to all other connected clients
                     for (int j = 0; j < MAX_CLIENTS; j++) {
 
-                        // Don't send the message back to the sender
-                        if (j == i) {
-                            continue;
-                        }
-
-                        // Only send to connected clients
-                        if (clients[j].socket != -1) {
+                        if (clients[j].socket != -1 &&
+                            clients[j].registered &&
+                            strcmp(clients[j].username, target) == 0) {
 
                             if (send(clients[j].socket,
                                     buffer,
@@ -274,7 +261,61 @@ int main() {
                                     0) < 0) {
                                 perror("send");
                             }
+
+                            printf("[MESSAGE] %s -> %s: %s",
+                                clients[i].username,
+                                target,
+                                buffer);
+
+                            break;
                         }
+                    }
+                }
+
+                continue;
+            }
+
+            if (strcmp(buffer, "/who\n") == 0) {
+
+                char response[BUFFER_SIZE] = "Online users:\n";
+
+                for (int j = 0; j < MAX_CLIENTS; j++) {
+                    if (clients[j].socket != -1 &&
+                        clients[j].registered) {
+                        strcat(response, clients[j].username);
+                        strcat(response, "\n");
+                    }
+                }
+
+                printf("[COMMAND] %s requested /who\n",
+                    clients[i].username);
+                if (send(clients[i].socket,
+                        response,
+                        strlen(response),
+                        0) < 0) {
+                    perror("send");
+                }
+
+                continue;
+            }
+
+            // Relay message to all other connected clients
+            for (int j = 0; j < MAX_CLIENTS; j++) {
+
+                // Don't send the message back to the sender
+                if (j == i) {
+                    continue;
+                }
+
+                // Only send to connected clients
+                if (clients[j].socket != -1 &&
+                    clients[j].registered) {
+
+                    if (send(clients[j].socket,
+                            buffer,
+                            bytes_received,
+                            0) < 0) {
+                        perror("send");
                     }
                 }
             }

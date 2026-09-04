@@ -11,6 +11,22 @@
 #define BUFFER_SIZE 1024
 #define USERNAME_SIZE 32
 
+int send_message(int sockfd, const char *message)
+{
+    char buffer[BUFFER_SIZE];
+
+    snprintf(buffer,
+             BUFFER_SIZE,
+             "%s%s",
+             message,
+             (message[strlen(message) - 1] == '\n') ? "" : "\n");
+
+    return send(sockfd,
+                buffer,
+                strlen(buffer),
+                0);
+}
+
 int main() {
     int sockfd;
     struct sockaddr_in server_addr;
@@ -46,23 +62,51 @@ int main() {
         return 1;
     }
 
-    printf("Connected to server.\n");
+    printf("[CONNECTED] Connected to server.\n");   
 
-    printf("Enter username: ");
+    while (1) {
+        printf("Enter username: ");
 
-    if (fgets(username, USERNAME_SIZE, stdin) == NULL) {
-        close(sockfd);
-        return 1;
-    }
+        if (fgets(username, USERNAME_SIZE, stdin) == NULL) {
+            close(sockfd);
+            return 1;
+        }
 
-    // Remove newline
-    username[strcspn(username, "\n")] = '\0';
+        username[strcspn(username, "\n")] = '\0';
 
-    if (send(sockfd,
-            username,
-            strlen(username),
-            0) < 0) {
-        perror("send");
+        if (send_message(sockfd, username) < 0) {
+            perror("send");
+            close(sockfd);
+            return 1;
+        }
+
+        char response[BUFFER_SIZE];
+
+        int bytes_received = recv(sockfd,
+                                response,
+                                BUFFER_SIZE - 1,
+                                0);
+
+        if (bytes_received <= 0) {
+            printf("[DISCONNECTED] Server disconnected.\n");
+            close(sockfd);
+            return 1;
+        }
+
+        response[bytes_received] = '\0';
+
+        if (strcmp(response, "USERNAME_OK\n") == 0) {
+            printf("[REGISTER] Username registered: %s\n", username);
+            break;
+        }
+
+        if (strcmp(response, "USERNAME_TAKEN\n") == 0) {
+            printf("[REGISTER] Username '%s' is already in use. Try another.\n",
+                username);
+            continue;
+        }
+
+        printf("[ERROR] Unexpected server response.\n");
         close(sockfd);
         return 1;
     }
@@ -116,7 +160,11 @@ int main() {
             // -------------------------
             if (strcmp(message, "/quit") == 0) {
 
-                send(sockfd, "/quit\n", 6, 0);
+                if (send_message(sockfd, "/quit") < 0) {
+                    perror("send");
+                }
+
+                printf("[DISCONNECTED] Closing connection.\n");
                 break;
             }
 
@@ -126,11 +174,7 @@ int main() {
             // -------------------------
             if (strcmp(message, "/who") == 0) {
 
-                if (send(sockfd,
-                        "/who\n",
-                        5,
-                        0) < 0) {
-
+                if (send_message(sockfd, "/who") < 0) {
                     perror("send");
                     break;
                 }
@@ -147,7 +191,7 @@ int main() {
                 char *target = message + 6;
 
                 if (strlen(target) == 0) {
-                    printf("Usage: /chat username\n");
+                    printf("[ERROR] Usage: /chat username\n");
                     continue;
                 }
 
@@ -157,8 +201,7 @@ int main() {
 
                 current_chat[USERNAME_SIZE - 1] = '\0';
 
-                printf("Now chatting with %s\n", current_chat);
-
+                printf("[CHAT] Now chatting with %s\n", current_chat);
                 continue;
             }
 
@@ -168,11 +211,7 @@ int main() {
             // -------------------------
             if (message[0] == '@') {
 
-                if (send(sockfd,
-                        message,
-                        strlen(message),
-                        0) < 0) {
-
+                if (send_message(sockfd, message) < 0) {
                     perror("send");
                     break;
                 }
@@ -186,7 +225,7 @@ int main() {
             // -------------------------
             if (strlen(current_chat) == 0) {
 
-                printf("No chat selected. Use /chat username first.\n");
+                printf("[ERROR] No chat selected. Use /chat username first.\n");
 
                 continue;
             }
@@ -200,11 +239,7 @@ int main() {
                     BUFFER_SIZE - USERNAME_SIZE - 3,
                     message);
 
-            if (send(sockfd,
-                    routed_message,
-                    strlen(routed_message),
-                    0) < 0) {
-
+            if (send_message(sockfd, routed_message) < 0) {
                 perror("send");
                 break;
             }
@@ -220,13 +255,13 @@ int main() {
                                       0);
 
             if (bytes_received <= 0) {
-                printf("Server disconnected.\n");
+                printf("[DISCONNECTED] Server disconnected.\n");
                 break;
             }
 
             buffer[bytes_received] = '\0';
 
-            printf("Received: %s", buffer);
+            printf("[MESSAGE] %s", buffer);
             fflush(stdout);
         }
     }
