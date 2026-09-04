@@ -118,6 +118,73 @@ int decrypt_message(
     return plaintext_len;
 }
 
+int send_encrypted_message(
+    int sockfd,
+    const unsigned char *key,
+    const char *message
+)
+{
+    unsigned char nonce[GCM_NONCE_SIZE];
+    unsigned char ciphertext[BUFFER_SIZE];
+    unsigned char tag[GCM_TAG_SIZE];
+
+    int plaintext_len = strlen(message);
+
+    int ciphertext_len = aes_gcm_encrypt(
+        key,
+        (const unsigned char *)message,
+        plaintext_len,
+        nonce,
+        ciphertext,
+        tag
+    );
+
+    if (ciphertext_len <= 0) {
+        printf("[CRYPTO] Encryption failed.\n");
+        return -1;
+    }
+
+    /*
+     * Convert binary data to hexadecimal so that
+     * our existing newline-delimited protocol can
+     * continue to use strings.
+     */
+    char nonce_hex[GCM_NONCE_SIZE * 2 + 1];
+    char ciphertext_hex[BUFFER_SIZE * 2 + 1];
+    char tag_hex[GCM_TAG_SIZE * 2 + 1];
+
+    for (int i = 0; i < GCM_NONCE_SIZE; i++)
+        sprintf(&nonce_hex[i * 2], "%02x", nonce[i]);
+
+    for (int i = 0; i < ciphertext_len; i++)
+        sprintf(&ciphertext_hex[i * 2], "%02x", ciphertext[i]);
+
+    for (int i = 0; i < GCM_TAG_SIZE; i++)
+        sprintf(&tag_hex[i * 2], "%02x", tag[i]);
+
+    nonce_hex[GCM_NONCE_SIZE * 2] = '\0';
+    ciphertext_hex[ciphertext_len * 2] = '\0';
+    tag_hex[GCM_TAG_SIZE * 2] = '\0';
+
+    char packet[BUFFER_SIZE * 3];
+
+    snprintf(
+        packet,
+        sizeof(packet),
+        "ENC %s %s %s\n",
+        nonce_hex,
+        ciphertext_hex,
+        tag_hex
+    );
+
+    return send(
+        sockfd,
+        packet,
+        strlen(packet),
+        0
+    );
+}
+
 int main() {
     int server_fd;
     struct sockaddr_in server_addr;
@@ -433,10 +500,11 @@ int main() {
                     printf("[REGISTER] Username already in use: %s\n",
                         plaintext);
 
-                    send(clients[i].socket,
-                        "USERNAME_TAKEN\n",
-                        15,
-                        0);
+                    send_encrypted_message(
+                        clients[i].socket,
+                        clients[i].aes_key,
+                        "USERNAME_TAKEN"
+                    );
 
                     continue;
                 }
@@ -449,10 +517,11 @@ int main() {
 
                 clients[i].registered = 1;
 
-                send(clients[i].socket,
-                    "USERNAME_OK\n",
-                    12,
-                    0);
+                send_encrypted_message(
+                    clients[i].socket,
+                    clients[i].aes_key,
+                    "USERNAME_OK"
+                );
 
                 printf("[REGISTER] Username registered: %s\n",
                     clients[i].username);

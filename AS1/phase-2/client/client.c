@@ -96,6 +96,99 @@ int send_encrypted_message(
     );
 }
 
+int decrypt_message(
+    const unsigned char *key,
+    char *packet,
+    unsigned char *plaintext
+)
+{
+    char *type;
+    char *nonce_hex;
+    char *ciphertext_hex;
+    char *tag_hex;
+
+    unsigned char nonce[GCM_NONCE_SIZE];
+    unsigned char ciphertext[BUFFER_SIZE];
+    unsigned char tag[GCM_TAG_SIZE];
+
+    /*
+     * Packet format:
+     *
+     * ENC <nonce> <ciphertext> <tag>
+     */
+
+    type = strtok(packet, " ");
+    nonce_hex = strtok(NULL, " ");
+    ciphertext_hex = strtok(NULL, " ");
+    tag_hex = strtok(NULL, " \n");
+
+    if (type == NULL ||
+        nonce_hex == NULL ||
+        ciphertext_hex == NULL ||
+        tag_hex == NULL ||
+        strcmp(type, "ENC") != 0) {
+
+        printf("[CRYPTO] Invalid encrypted packet.\n");
+        return 0;
+    }
+
+    /*
+     * Convert nonce from hexadecimal to bytes.
+     */
+    for (int i = 0; i < GCM_NONCE_SIZE; i++) {
+        sscanf(
+            &nonce_hex[i * 2],
+            "%2hhx",
+            &nonce[i]
+        );
+    }
+
+    /*
+     * Convert ciphertext from hexadecimal to bytes.
+     */
+    int ciphertext_len = strlen(ciphertext_hex) / 2;
+
+    for (int i = 0; i < ciphertext_len; i++) {
+        sscanf(
+            &ciphertext_hex[i * 2],
+            "%2hhx",
+            &ciphertext[i]
+        );
+    }
+
+    /*
+     * Convert authentication tag from hexadecimal to bytes.
+     */
+    for (int i = 0; i < GCM_TAG_SIZE; i++) {
+        sscanf(
+            &tag_hex[i * 2],
+            "%2hhx",
+            &tag[i]
+        );
+    }
+
+    /*
+     * Decrypt and authenticate.
+     */
+    int plaintext_len = aes_gcm_decrypt(
+        key,
+        nonce,
+        ciphertext,
+        ciphertext_len,
+        tag,
+        plaintext
+    );
+
+    if (plaintext_len <= 0) {
+        printf("[CRYPTO] Authentication failed.\n");
+        return 0;
+    }
+
+    plaintext[plaintext_len] = '\0';
+
+    return plaintext_len;
+}
+
 int perform_dh_handshake(
     int sock,
     DHKeyPair *dh_keypair,
@@ -339,14 +432,28 @@ int main() {
             return 1;
         }
 
-        response[bytes_received] = '\0';
+        unsigned char plaintext[BUFFER_SIZE];
 
-        if (strcmp(response, "USERNAME_OK\n") == 0) {
+        int plaintext_len = decrypt_message(
+            aes_key,
+            response,
+            plaintext
+        );
+
+        if (plaintext_len <= 0) {
+            printf("[CRYPTO] Failed to decrypt server response.\n");
+            close(sockfd);
+            return 1;
+        }
+
+        plaintext[plaintext_len] = '\0';
+
+        if (strcmp((char *)plaintext, "USERNAME_OK") == 0) {
             printf("[REGISTER] Username registered: %s\n", username);
             break;
         }
 
-        if (strcmp(response, "USERNAME_TAKEN\n") == 0) {
+        if (strcmp((char *)plaintext, "USERNAME_TAKEN") == 0) {
             printf("[REGISTER] Username '%s' is already in use. Try another.\n",
                 username);
             continue;
