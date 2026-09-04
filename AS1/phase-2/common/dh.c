@@ -170,6 +170,20 @@ error:
     return NULL;
 }
 
+
+void dh_free_keypair(DHKeyPair *keypair)
+{
+    if (keypair == NULL) {
+        return;
+    }
+
+    BN_free(keypair->private_key);
+    BN_free(keypair->public_key);
+
+    keypair->private_key = NULL;
+    keypair->public_key = NULL;
+}
+
 void dh_print_fingerprint(const BIGNUM *shared_secret)
 {
     unsigned char secret_bytes[256];
@@ -192,15 +206,31 @@ void dh_print_fingerprint(const BIGNUM *shared_secret)
     printf("\n");
 }
 
-void dh_free_keypair(DHKeyPair *keypair)
+int dh_derive_key(
+    const BIGNUM *shared_secret,
+    unsigned char *key
+)
 {
-    if (keypair == NULL) {
-        return;
+    unsigned char secret_bytes[256];
+    int secret_length;
+
+    if (shared_secret == NULL || key == NULL)
+        return 0;
+
+    secret_length = BN_num_bytes(shared_secret);
+
+    if (secret_length <= 0 || secret_length > (int)sizeof(secret_bytes))
+        return 0;
+
+    BN_bn2bin(shared_secret, secret_bytes);
+
+    if (SHA256(
+            secret_bytes,
+            secret_length,
+            key
+        ) == NULL) {
+        return 0;
     }
 
-    BN_free(keypair->private_key);
-    BN_free(keypair->public_key);
-
-    keypair->private_key = NULL;
-    keypair->public_key = NULL;
+    return 1;
 }

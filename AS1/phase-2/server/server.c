@@ -20,6 +20,8 @@ typedef struct {
 
     DHKeyPair dh_keypair;
     BIGNUM *shared_secret;
+
+    unsigned char aes_key[32];
 } Client;
 
 int main() {
@@ -271,7 +273,20 @@ int main() {
                 }
 
                 printf("[DH] Shared secret established.\n");
-                dh_print_fingerprint(clients[i].shared_secret);
+                // dh_print_fingerprint(clients[i].shared_secret);
+                if (!dh_derive_key(
+                        clients[i].shared_secret,
+                        clients[i].aes_key
+                    )) {
+                    printf("[DH] Failed to derive AES key.\n");
+
+                    close(clients[i].socket);
+                    clients[i].socket = -1;
+
+                    continue;
+                }
+
+                printf("[DH] AES-256 key derived.\n");
 
                 clients[i].dh_complete = 1;
 

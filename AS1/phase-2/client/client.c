@@ -134,7 +134,7 @@ int perform_dh_handshake(
     }
 
     printf("[DH] Shared secret established.\n");
-    dh_print_fingerprint(*shared_secret);
+    // dh_print_fingerprint(*shared_secret);
 
 
     /*
@@ -224,6 +224,19 @@ int main() {
         close(sockfd);
         return 1;
     }
+
+    unsigned char aes_key[32];
+
+    if (!dh_derive_key(shared_secret, aes_key)) {
+        printf("[DH] Failed to derive AES key.\n");
+
+        BN_free(shared_secret);
+        dh_free_keypair(&dh_keypair);
+        close(sockfd);
+        return 1;
+    }
+
+    printf("[DH] AES-256 key derived.\n");
 
     // Now proceed with username registration
 
