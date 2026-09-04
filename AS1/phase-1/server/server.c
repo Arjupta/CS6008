@@ -185,11 +185,56 @@ int main() {
                 } else {
                     buffer[bytes_received] = '\0';
 
-                    printf("[%s]: %s",
+                    buffer[strcspn(buffer, "\n")] = '\0';
+
+                    printf("[RECEIVED] %s: %s\n",
                         clients[i].username,
                         buffer);
 
-                    if (strncmp(buffer, "/who", 4) == 0) {
+                    if (strcmp(buffer, "/quit") == 0) {
+
+                        printf("%s requested to quit.\n",
+                            clients[i].username);
+
+                        close(clients[i].socket);
+
+                        clients[i].socket = -1;
+                        clients[i].username[0] = '\0';
+
+                        continue;
+                    }
+
+                    if (buffer[0] == '@') {
+                        char target[USERNAME_SIZE];
+
+                        if (sscanf(buffer, "@%31s", target) == 1) {
+
+                            for (int j = 0; j < MAX_CLIENTS; j++) {
+
+                                if (clients[j].socket != -1 &&
+                                    strcmp(clients[j].username, target) == 0) {
+
+                                    if (send(clients[j].socket,
+                                            buffer,
+                                            bytes_received,
+                                            0) < 0) {
+                                        perror("send");
+                                    }
+
+                                    printf("Relayed message from %s to %s: %s",
+                                        clients[i].username,
+                                        target,
+                                        buffer);
+
+                                    break;
+                                }
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if (strcmp(buffer, "/who") == 0) {
 
                         char response[BUFFER_SIZE] = "Online users:\n";
 
@@ -200,10 +245,14 @@ int main() {
                             }
                         }
 
-                        send(clients[i].socket,
-                            response,
-                            strlen(response),
-                            0);
+                        printf("[RESPONSE] Sent online users to %s\n",
+                            clients[i].username);
+                        if (send(clients[i].socket,
+                                response,
+                                strlen(response),
+                                0) < 0) {
+                            perror("send");
+                        }
 
                         continue;
                     }

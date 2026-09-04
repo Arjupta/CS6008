@@ -9,10 +9,13 @@
 #define SERVER_IP "192.168.56.10"
 #define PORT 5000
 #define BUFFER_SIZE 1024
+#define USERNAME_SIZE 32
 
 int main() {
     int sockfd;
     struct sockaddr_in server_addr;
+    char username[USERNAME_SIZE];
+    char current_chat[USERNAME_SIZE] = "";
 
     // Create socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -45,11 +48,9 @@ int main() {
 
     printf("Connected to server.\n");
 
-    char username[BUFFER_SIZE];
-
     printf("Enter username: ");
 
-    if (fgets(username, BUFFER_SIZE, stdin) == NULL) {
+    if (fgets(username, USERNAME_SIZE, stdin) == NULL) {
         close(sockfd);
         return 1;
     }
@@ -106,15 +107,108 @@ int main() {
                 break;
             }
 
+            // Remove newline
+            message[strcspn(message, "\n")] = '\0';
+
+
+            // -------------------------
+            // /quit
+            // -------------------------
+            if (strcmp(message, "/quit") == 0) {
+
+                send(sockfd, "/quit\n", 6, 0);
+                break;
+            }
+
+
+            // -------------------------
+            // /who
+            // -------------------------
+            if (strcmp(message, "/who") == 0) {
+
+                if (send(sockfd,
+                        "/who\n",
+                        5,
+                        0) < 0) {
+
+                    perror("send");
+                    break;
+                }
+
+                continue;
+            }
+
+
+            // -------------------------
+            // /chat username
+            // -------------------------
+            if (strncmp(message, "/chat ", 6) == 0) {
+
+                char *target = message + 6;
+
+                if (strlen(target) == 0) {
+                    printf("Usage: /chat username\n");
+                    continue;
+                }
+
+                strncpy(current_chat,
+                        target,
+                        USERNAME_SIZE - 1);
+
+                current_chat[USERNAME_SIZE - 1] = '\0';
+
+                printf("Now chatting with %s\n", current_chat);
+
+                continue;
+            }
+
+
+            // -------------------------
+            // @username message
+            // -------------------------
+            if (message[0] == '@') {
+
+                if (send(sockfd,
+                        message,
+                        strlen(message),
+                        0) < 0) {
+
+                    perror("send");
+                    break;
+                }
+
+                continue;
+            }
+
+
+            // -------------------------
+            // Normal message
+            // -------------------------
+            if (strlen(current_chat) == 0) {
+
+                printf("No chat selected. Use /chat username first.\n");
+
+                continue;
+            }
+
+            char routed_message[BUFFER_SIZE];
+
+            snprintf(routed_message,
+                    BUFFER_SIZE,
+                    "@%s %.*s\n",
+                    current_chat,
+                    BUFFER_SIZE - USERNAME_SIZE - 3,
+                    message);
+
             if (send(sockfd,
-                     message,
-                     strlen(message),
-                     0) < 0) {
+                    routed_message,
+                    strlen(routed_message),
+                    0) < 0) {
+
                 perror("send");
                 break;
             }
         }
-
         // Check server socket
         if (FD_ISSET(sockfd, &readfds)) {
 
