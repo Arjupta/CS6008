@@ -5,8 +5,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include "../common/dh.h"
 
-#define SERVER_IP "192.168.56.10"
+#define SERVER_IP "10.129.27.74"
 #define PORT 5000
 #define BUFFER_SIZE 1024
 #define USERNAME_SIZE 32
@@ -27,11 +28,161 @@ int send_message(int sockfd, const char *message)
                 0);
 }
 
+int perform_dh_handshake(
+    int sock,
+    DHKeyPair *dh_keypair,
+    BIGNUM **shared_secret
+)
+{
+    char buffer[BUFFER_SIZE];
+
+    /*
+     * Step 1: Receive server's public key
+     */
+    int bytes_received = recv(
+        sock,
+        buffer,
+        BUFFER_SIZE - 1,
+        0
+    );
+
+    if (bytes_received <= 0) {
+        perror("recv");
+        return 0;
+    }
+
+    buffer[bytes_received] = '\0';
+
+    if (strncmp(buffer, "DH_PUBLIC ", 10) != 0) {
+        printf("[DH] Invalid server DH message.\n");
+        return 0;
+    }
+
+    char *server_public_hex = buffer + 10;
+
+    server_public_hex[strcspn(server_public_hex, "\n")] = '\0';
+
+    BIGNUM *server_public_key = NULL;
+
+    if (!BN_hex2bn(&server_public_key, server_public_hex)) {
+        printf("[DH] Failed to parse server public key.\n");
+        return 0;
+    }
+
+    printf("[DH] Received server public key.\n");
+
+
+    /*
+     * Step 2: Generate client's DH key pair
+     */
+    if (!dh_generate_keypair(dh_keypair)) {
+        printf("[DH] Failed to generate client key pair.\n");
+
+        BN_free(server_public_key);
+        return 0;
+    }
+
+
+    /*
+     * Step 3: Send client's public key
+     */
+    char public_key_hex[BUFFER_SIZE];
+
+    char *temp_hex = BN_bn2hex(dh_keypair->public_key);
+
+    snprintf(
+        public_key_hex,
+        BUFFER_SIZE,
+        "DH_PUBLIC %s\n",
+        temp_hex
+    );
+
+    OPENSSL_free(temp_hex);
+
+    if (send(
+            sock,
+            public_key_hex,
+            strlen(public_key_hex),
+            0
+        ) < 0) {
+
+        perror("send");
+
+        BN_free(server_public_key);
+        dh_free_keypair(dh_keypair);
+
+        return 0;
+    }
+
+
+    /*
+     * Step 4: Compute shared secret
+     */
+    *shared_secret =
+        dh_compute_shared_secret(
+            dh_keypair->private_key,
+            server_public_key
+        );
+
+    BN_free(server_public_key);
+
+    if (*shared_secret == NULL) {
+        printf("[DH] Failed to compute shared secret.\n");
+
+        dh_free_keypair(dh_keypair);
+        return 0;
+    }
+
+    printf("[DH] Shared secret established.\n");
+    dh_print_fingerprint(*shared_secret);
+
+
+    /*
+     * Step 5: Wait for server confirmation
+     */
+    bytes_received = recv(
+        sock,
+        buffer,
+        BUFFER_SIZE - 1,
+        0
+    );
+
+    if (bytes_received <= 0) {
+        perror("recv");
+        BN_free(*shared_secret);
+        *shared_secret = NULL;
+        dh_free_keypair(dh_keypair);
+        return 0;
+    }
+
+    buffer[bytes_received] = '\0';
+
+    if (strcmp(buffer, "DH_OK\n") != 0) {
+        printf("[DH] Server did not confirm DH handshake.\n");
+
+        BN_free(*shared_secret);
+        *shared_secret = NULL;
+        dh_free_keypair(dh_keypair);
+
+        return 0;
+    }
+
+    printf("[DH] Handshake complete.\n");
+
+    return 1;
+}
+
 int main() {
     int sockfd;
     struct sockaddr_in server_addr;
     char username[USERNAME_SIZE];
     char current_chat[USERNAME_SIZE] = "";
+
+    DHKeyPair dh_keypair;
+    BIGNUM *shared_secret = NULL;
+
+    dh_keypair.private_key = NULL;
+    dh_keypair.public_key = NULL;
 
     // Create socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -61,6 +212,20 @@ int main() {
         close(sockfd);
         return 1;
     }
+
+    if (!perform_dh_handshake(
+            sockfd,
+            &dh_keypair,
+            &shared_secret
+        )) {
+
+        printf("[DH] Handshake failed.\n");
+
+        close(sockfd);
+        return 1;
+    }
+
+    // Now proceed with username registration
 
     printf("[CONNECTED] Connected to server.\n");   
 

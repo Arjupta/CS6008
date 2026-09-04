@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include "../common/dh.h"
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
@@ -14,7 +15,11 @@
 typedef struct {
     int socket;
     int registered;
+    int dh_complete;
     char username[USERNAME_SIZE];
+
+    DHKeyPair dh_keypair;
+    BIGNUM *shared_secret;
 } Client;
 
 int main() {
@@ -27,7 +32,12 @@ int main() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].socket = -1;
         clients[i].registered = 0;
+        clients[i].dh_complete = 0;
         clients[i].username[0] = '\0';
+
+        clients[i].dh_keypair.private_key = NULL;
+        clients[i].dh_keypair.public_key = NULL;
+        clients[i].shared_secret = NULL;
     }
 
     // Create TCP socket
@@ -128,9 +138,53 @@ int main() {
             } else {
                 clients[slot].socket = client_fd;
                 clients[slot].registered = 0;
+                clients[slot].dh_complete = 0;
                 clients[slot].username[0] = '\0';
 
+                clients[slot].dh_keypair.private_key = NULL;
+                clients[slot].dh_keypair.public_key = NULL;
+                clients[slot].shared_secret = NULL;
+
+                if (!dh_generate_keypair(&clients[slot].dh_keypair)) {
+                    printf("[DH] Failed to generate server key pair.\n");
+
+                    close(client_fd);
+
+                    clients[slot].socket = -1;
+                    continue;
+                }
+
                 printf("[CONNECT] New client connected.\n");
+
+                printf("[DH] Server generated key pair for client slot %d.\n",
+                    slot);
+                
+                char public_key_hex[BUFFER_SIZE];
+
+                char *temp_hex =
+                    BN_bn2hex(clients[slot].dh_keypair.public_key);
+
+                snprintf(public_key_hex,
+                        BUFFER_SIZE,
+                        "DH_PUBLIC %s\n",
+                        temp_hex);
+
+                OPENSSL_free(temp_hex);
+
+                if (send(client_fd,
+                        public_key_hex,
+                        strlen(public_key_hex),
+                        0) < 0) {
+
+                    perror("send");
+
+                    dh_free_keypair(&clients[slot].dh_keypair);
+
+                    close(client_fd);
+
+                    clients[slot].socket = -1;
+                    continue;
+                }
             }
         }
 
@@ -172,6 +226,62 @@ int main() {
             }
 
             buffer[bytes_received] = '\0';
+
+            if (!clients[i].dh_complete) {
+
+                if (strncmp(buffer, "DH_PUBLIC ", 10) != 0) {
+                    printf("[DH] Invalid client DH message.\n");
+
+                    close(clients[i].socket);
+                    clients[i].socket = -1;
+
+                    continue;
+                }
+
+                char *client_public_hex = buffer + 10;
+
+                client_public_hex[strcspn(client_public_hex, "\n")] = '\0';
+
+                BIGNUM *client_public_key = NULL;
+
+                if (!BN_hex2bn(&client_public_key, client_public_hex)) {
+                    printf("[DH] Failed to parse client public key.\n");
+
+                    close(clients[i].socket);
+                    clients[i].socket = -1;
+
+                    continue;
+                }
+
+                clients[i].shared_secret =
+                    dh_compute_shared_secret(
+                        clients[i].dh_keypair.private_key,
+                        client_public_key
+                    );
+
+                BN_free(client_public_key);
+
+                if (clients[i].shared_secret == NULL) {
+                    printf("[DH] Failed to compute shared secret.\n");
+
+                    close(clients[i].socket);
+                    clients[i].socket = -1;
+
+                    continue;
+                }
+
+                printf("[DH] Shared secret established.\n");
+                dh_print_fingerprint(clients[i].shared_secret);
+
+                clients[i].dh_complete = 1;
+
+                send(clients[i].socket,
+                    "DH_OK\n",
+                    6,
+                    0);
+
+                continue;
+            }
 
             if (!clients[i].registered) {
 
