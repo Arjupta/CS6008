@@ -185,6 +185,29 @@ int send_encrypted_message(
     );
 }
 
+void format_forwarded_message(
+    const char *sender,
+    const char *message,
+    char *formatted_message
+)
+{
+    char *message_text = strchr(message, ' ');
+
+    if (message_text != NULL) {
+        message_text++;
+    } else {
+        message_text = (char *)message;
+    }
+
+    snprintf(
+        formatted_message,
+        BUFFER_SIZE,
+        "%s: %s",
+        sender,
+        message_text
+    );
+}
+
 int main() {
     int server_fd;
     struct sockaddr_in server_addr;
@@ -557,11 +580,19 @@ int main() {
                         if (clients[j].socket != -1 &&
                             clients[j].registered &&
                             strcmp(clients[j].username, target) == 0) {
+                            
+                            char forwarded_message[BUFFER_SIZE];
 
+                            format_forwarded_message(
+                                clients[i].username,
+                                (char *)plaintext,
+                                forwarded_message
+                            );
+                            
                             if (send_encrypted_message(
                                     clients[j].socket,
                                     clients[j].aes_key,
-                                    (char *)plaintext) < 0) {
+                                    forwarded_message) < 0) {
                                 perror("send");
                             }
 
