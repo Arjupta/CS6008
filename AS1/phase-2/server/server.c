@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include "../common/dh.h"
+#include "../common/crypto.h"
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
@@ -23,6 +24,99 @@ typedef struct {
 
     unsigned char aes_key[32];
 } Client;
+
+int decrypt_message(
+    const unsigned char *key,
+    char *packet,
+    unsigned char *plaintext
+)
+{
+    char *type;
+    char *nonce_hex;
+    char *ciphertext_hex;
+    char *tag_hex;
+
+    unsigned char nonce[GCM_NONCE_SIZE];
+    unsigned char ciphertext[BUFFER_SIZE];
+    unsigned char tag[GCM_TAG_SIZE];
+
+    /*
+     * Packet format:
+     *
+     * ENC <nonce> <ciphertext> <tag>
+     */
+
+    type = strtok(packet, " ");
+    nonce_hex = strtok(NULL, " ");
+    ciphertext_hex = strtok(NULL, " ");
+    tag_hex = strtok(NULL, " \n");
+
+    if (type == NULL ||
+        nonce_hex == NULL ||
+        ciphertext_hex == NULL ||
+        tag_hex == NULL ||
+        strcmp(type, "ENC") != 0) {
+
+        printf("[CRYPTO] Invalid encrypted packet.\n");
+        return 0;
+    }
+
+    /*
+     * Convert nonce from hexadecimal to bytes.
+     */
+    for (int i = 0; i < GCM_NONCE_SIZE; i++) {
+        sscanf(
+            &nonce_hex[i * 2],
+            "%2hhx",
+            &nonce[i]
+        );
+    }
+
+    /*
+     * Convert ciphertext from hexadecimal to bytes.
+     */
+    int ciphertext_len = strlen(ciphertext_hex) / 2;
+
+    for (int i = 0; i < ciphertext_len; i++) {
+        sscanf(
+            &ciphertext_hex[i * 2],
+            "%2hhx",
+            &ciphertext[i]
+        );
+    }
+
+    /*
+     * Convert authentication tag from hexadecimal to bytes.
+     */
+    for (int i = 0; i < GCM_TAG_SIZE; i++) {
+        sscanf(
+            &tag_hex[i * 2],
+            "%2hhx",
+            &tag[i]
+        );
+    }
+
+    /*
+     * Decrypt and authenticate.
+     */
+    int plaintext_len = aes_gcm_decrypt(
+        key,
+        nonce,
+        ciphertext,
+        ciphertext_len,
+        tag,
+        plaintext
+    );
+
+    if (plaintext_len <= 0) {
+        printf("[CRYPTO] Authentication failed.\n");
+        return 0;
+    }
+
+    plaintext[plaintext_len] = '\0';
+
+    return plaintext_len;
+}
 
 int main() {
     int server_fd;
@@ -300,8 +394,23 @@ int main() {
 
             if (!clients[i].registered) {
 
-                buffer[strcspn(buffer, "\n")] = '\0';
+                unsigned char plaintext[BUFFER_SIZE];
 
+                int plaintext_len = decrypt_message(
+                    clients[i].aes_key,
+                    buffer,
+                    plaintext
+                );
+
+                if (plaintext_len <= 0) {
+                    printf("[CRYPTO] Failed to decrypt username.\n");
+
+                    close(clients[i].socket);
+                    clients[i].socket = -1;
+                    continue;
+                }
+
+                plaintext[plaintext_len] = '\0';
                 int duplicate = 0;
 
                 for (int j = 0; j < MAX_CLIENTS; j++) {
@@ -312,7 +421,7 @@ int main() {
 
                     if (clients[j].socket != -1 &&
                         clients[j].registered &&
-                        strcmp(clients[j].username, buffer) == 0) {
+                        strcmp(clients[j].username, (char *)plaintext) == 0) {
 
                         duplicate = 1;
                         break;
@@ -322,7 +431,7 @@ int main() {
                 if (duplicate) {
 
                     printf("[REGISTER] Username already in use: %s\n",
-                        buffer);
+                        plaintext);
 
                     send(clients[i].socket,
                         "USERNAME_TAKEN\n",
@@ -333,7 +442,7 @@ int main() {
                 }
 
                 strncpy(clients[i].username,
-                        buffer,
+                        (char *)plaintext,
                         USERNAME_SIZE - 1);
 
                 clients[i].username[USERNAME_SIZE - 1] = '\0';
