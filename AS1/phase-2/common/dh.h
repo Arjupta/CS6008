@@ -17,4 +17,6 @@ BIGNUM *dh_compute_shared_secret(
 
 void dh_free_keypair(DHKeyPair *keypair);
 
+void dh_print_fingerprint(const BIGNUM *shared_secret);
+
 #endif

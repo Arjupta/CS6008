@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <openssl/bn.h>
+#include <openssl/sha.h>
+
 
 /*
  * RFC 3526, 2048-bit MODP Group 14
@@ -168,6 +170,27 @@ error:
     return NULL;
 }
 
+void dh_print_fingerprint(const BIGNUM *shared_secret)
+{
+    unsigned char secret_bytes[256];
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+
+    int secret_length = BN_num_bytes(shared_secret);
+
+    BN_bn2bin(shared_secret, secret_bytes);
+
+    SHA256(secret_bytes,
+           secret_length,
+           hash);
+
+    printf("Fingerprint: ");
+
+    for (int i = 0; i < 8; i++) {
+        printf("%02x", hash[i]);
+    }
+
+    printf("\n");
+}
 
 void dh_free_keypair(DHKeyPair *keypair)
 {
