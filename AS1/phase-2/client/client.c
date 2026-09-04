@@ -513,7 +513,7 @@ int main() {
             // -------------------------
             if (strcmp(message, "/quit") == 0) {
 
-                if (send_message(sockfd, "/quit") < 0) {
+                if (send_encrypted_message(sockfd, aes_key, "/quit\n") < 0) {
                     perror("send");
                 }
 
@@ -527,7 +527,7 @@ int main() {
             // -------------------------
             if (strcmp(message, "/who") == 0) {
 
-                if (send_message(sockfd, "/who") < 0) {
+                if (send_encrypted_message(sockfd, aes_key, "/who\n") < 0) {
                     perror("send");
                     break;
                 }
@@ -564,7 +564,14 @@ int main() {
             // -------------------------
             if (message[0] == '@') {
 
-                if (send_message(sockfd, message) < 0) {
+                char routed_message[BUFFER_SIZE+1];
+
+                snprintf(routed_message,
+                        BUFFER_SIZE+1,
+                        "%s\n",
+                        message);
+
+                if (send_encrypted_message(sockfd, aes_key, message) < 0) {
                     perror("send");
                     break;
                 }
@@ -592,7 +599,7 @@ int main() {
                     BUFFER_SIZE - USERNAME_SIZE - 3,
                     message);
 
-            if (send_message(sockfd, routed_message) < 0) {
+            if (send_encrypted_message(sockfd, aes_key, routed_message) < 0) {
                 perror("send");
                 break;
             }
@@ -614,7 +621,22 @@ int main() {
 
             buffer[bytes_received] = '\0';
 
-            printf("[MESSAGE] %s", buffer);
+            unsigned char plaintext[BUFFER_SIZE];
+
+            int plaintext_len = decrypt_message(
+                aes_key,
+                buffer,
+                plaintext
+            );
+
+            if (plaintext_len <= 0) {
+                printf("[CRYPTO] Failed to decrypt server message.\n");
+                continue;
+            }
+
+            plaintext[plaintext_len] = '\0';
+
+            printf("[MESSAGE] %s\n", plaintext);
             fflush(stdout);
         }
     }

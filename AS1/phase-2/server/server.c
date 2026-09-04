@@ -459,23 +459,23 @@ int main() {
                 continue;
             }
 
+            unsigned char plaintext[BUFFER_SIZE];
+
+            int plaintext_len = decrypt_message(
+                clients[i].aes_key,
+                buffer,
+                plaintext
+            );
+
+            if (plaintext_len <= 0) {
+                printf("[CRYPTO] Failed to decrypt message from %s.\n", buffer);
+
+                close(clients[i].socket);
+                clients[i].socket = -1;
+                continue;
+            }
+
             if (!clients[i].registered) {
-
-                unsigned char plaintext[BUFFER_SIZE];
-
-                int plaintext_len = decrypt_message(
-                    clients[i].aes_key,
-                    buffer,
-                    plaintext
-                );
-
-                if (plaintext_len <= 0) {
-                    printf("[CRYPTO] Failed to decrypt username.\n");
-
-                    close(clients[i].socket);
-                    clients[i].socket = -1;
-                    continue;
-                }
 
                 plaintext[plaintext_len] = '\0';
                 int duplicate = 0;
@@ -531,9 +531,9 @@ int main() {
 
             printf("[MESSAGE] %s: %s",
                 clients[i].username,
-                buffer);
+                plaintext);
 
-            if (strcmp(buffer, "/quit\n") == 0) {
+            if (strcmp((char *)plaintext, "/quit\n") == 0) {
 
                 printf("%s requested to quit.\n",
                     clients[i].username);
@@ -547,10 +547,10 @@ int main() {
                 continue;
             }
 
-            if (buffer[0] == '@') {
+            if (plaintext[0] == '@') {
                 char target[USERNAME_SIZE];
 
-                if (sscanf(buffer, "@%31s", target) == 1) {
+                if (sscanf((char *)plaintext, "@%31s", target) == 1) {
 
                     for (int j = 0; j < MAX_CLIENTS; j++) {
 
@@ -558,17 +558,17 @@ int main() {
                             clients[j].registered &&
                             strcmp(clients[j].username, target) == 0) {
 
-                            if (send(clients[j].socket,
-                                    buffer,
-                                    bytes_received,
-                                    0) < 0) {
+                            if (send_encrypted_message(
+                                    clients[j].socket,
+                                    clients[j].aes_key,
+                                    (char *)plaintext) < 0) {
                                 perror("send");
                             }
 
                             printf("[MESSAGE] %s -> %s: %s",
                                 clients[i].username,
                                 target,
-                                buffer);
+                                plaintext);
 
                             break;
                         }
@@ -578,7 +578,7 @@ int main() {
                 continue;
             }
 
-            if (strcmp(buffer, "/who\n") == 0) {
+            if (strcmp((char *)plaintext, "/who\n") == 0) {
 
                 char response[BUFFER_SIZE] = "Online users:\n";
 
@@ -592,10 +592,11 @@ int main() {
 
                 printf("[COMMAND] %s requested /who\n",
                     clients[i].username);
-                if (send(clients[i].socket,
-                        response,
-                        strlen(response),
-                        0) < 0) {
+                if (send_encrypted_message(
+                    clients[i].socket,
+                    clients[i].aes_key,
+                    response
+                ) < 0) {
                     perror("send");
                 }
 
@@ -614,10 +615,11 @@ int main() {
                 if (clients[j].socket != -1 &&
                     clients[j].registered) {
 
-                    if (send(clients[j].socket,
-                            buffer,
-                            bytes_received,
-                            0) < 0) {
+                    if (send_encrypted_message(
+                        clients[j].socket,
+                        clients[j].aes_key,
+                        (char *)plaintext
+                    ) < 0) {
                         perror("send");
                     }
                 }
