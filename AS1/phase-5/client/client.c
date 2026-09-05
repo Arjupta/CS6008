@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <time.h>
 #include "../common/dh.h"
 #include "../common/crypto.h"
 #include <openssl/x509.h>
@@ -612,11 +613,12 @@ void initiate_e2e(
     char *e2e_peer
 )
 {
-    if (*e2e_established) {
-        printf("[E2E] E2E session already established with %s.\n",
-               e2e_peer);
-        return;
-    }
+    // Commenting sanity check to allow rotation
+    // if (*e2e_established) {
+    //     printf("[E2E] E2E session already established with %s.\n",
+    //            e2e_peer);
+    //     return;
+    // }
 
     /* Generate E2E DH key pair */
     if (!dh_generate_keypair(e2e_keypair)) {
@@ -671,8 +673,12 @@ void handle_e2e_init(
     DHKeyPair *e2e_keypair,
     BIGNUM **e2e_shared_secret,
     unsigned char *e2e_key,
+    unsigned char *old_e2e_key,
+    int *old_key_valid,
     int *e2e_established,
-    char *e2e_peer
+    char *e2e_peer,
+    time_t *last_rotation,
+    int *rotation_in_progress
 )
 {
     char peer_username[USERNAME_SIZE];
@@ -728,6 +734,14 @@ void handle_e2e_init(
         return;
     }
 
+    /*
+    * Preserve the current key before installing the new one.
+    */
+    if (*e2e_established) {
+        memcpy(old_e2e_key, e2e_key, 32);
+        *old_key_valid = 1;
+    }
+
     /* Derive AES-256 E2E key */
     if (!dh_derive_key(*e2e_shared_secret, e2e_key)) {
         printf("[E2E] Failed to derive E2E key.\n");
@@ -774,6 +788,9 @@ void handle_e2e_init(
 
     *e2e_established = 1;
 
+    *last_rotation = time(NULL);
+    *rotation_in_progress = 0;
+    
     printf("[E2E] Key exchange complete with %s.\n",
            e2e_peer);
 }
@@ -783,7 +800,11 @@ void handle_e2e_ack(
     DHKeyPair *e2e_keypair,
     BIGNUM **e2e_shared_secret,
     unsigned char *e2e_key,
-    int *e2e_established
+    unsigned char *old_e2e_key,
+    int *old_key_valid,
+    int *e2e_established,
+    time_t *last_rotation,
+    int *rotation_in_progress
 )
 {
     char peer_username[USERNAME_SIZE];
@@ -827,6 +848,9 @@ void handle_e2e_ack(
         return;
     }
 
+    memcpy(old_e2e_key, e2e_key, sizeof(e2e_key));
+    old_key_valid = 1;
+
     /* Derive E2E AES-256 key */
     if (!dh_derive_key(*e2e_shared_secret, e2e_key)) {
         printf("[E2E] Failed to derive E2E key.\n");
@@ -840,9 +864,11 @@ void handle_e2e_ack(
     // dh_print_fingerprint(*e2e_shared_secret);
 
     *e2e_established = 1;
+    *last_rotation = time(NULL);
+    *rotation_in_progress = 0;
 
     printf("[E2E] Key exchange complete with %s.\n",
-           peer_username);
+        peer_username);
 }
 
 int send_e2e_message(
@@ -930,6 +956,8 @@ int send_e2e_message(
 
 void handle_e2e_message(
     const unsigned char *e2e_key,
+    const unsigned char *old_e2e_key,
+    int old_key_valid,
     char *message
 )
 {
@@ -1004,6 +1032,25 @@ void handle_e2e_message(
         tag,
         plaintext
     );
+
+    /*
+    * If the new/current key fails authentication,
+    * try the previous key.
+    */
+    if (plaintext_len <= 0 && old_key_valid) {
+
+        printf("[E2E] Current key authentication failed. "
+            "Trying previous key...\n");
+
+        plaintext_len = aes_gcm_decrypt(
+            old_e2e_key,
+            nonce,
+            ciphertext,
+            ciphertext_len,
+            tag,
+            plaintext
+        );
+    }
 
     if (plaintext_len <= 0) {
         printf("[E2E] Authentication failed.\n");
@@ -1096,8 +1143,14 @@ int main() {
     DHKeyPair e2e_keypair;
     BIGNUM *e2e_shared_secret = NULL;
     unsigned char e2e_key[32];
+    unsigned char old_e2e_key[32];
+
+    int old_key_valid = 0;
+    int rotation_in_progress = 0;
     int e2e_established = 0;
     char e2e_peer[USERNAME_SIZE];
+
+    time_t last_rotation = time(NULL);
 
     while (1) {
         printf("Enter username: ");
@@ -1179,18 +1232,52 @@ int main() {
             max_fd = STDIN_FILENO;
         }
 
+        struct timeval timeout;
+
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+
         // Wait until keyboard or socket has data
-        int activity = select(max_fd + 1,
-                              &readfds,
-                              NULL,
-                              NULL,
-                              NULL);
+        int activity = select(
+            max_fd + 1,
+            &readfds,
+            NULL,
+            NULL,
+            &timeout
+        );
 
         if (activity < 0) {
             perror("select");
             break;
         }
 
+        /*
+        * Automatic E2E key rotation every 60 seconds.
+        *
+        * Only the lexicographically smaller username initiates
+        * the rotation. This prevents both clients from starting
+        * a new DH exchange at the same time.
+        */
+        if (e2e_established &&
+            !rotation_in_progress &&
+            strcmp(username, e2e_peer) < 0 &&
+            time(NULL) - last_rotation >= 60) {
+
+            printf("[E2E] 60 seconds elapsed. Starting key rotation...\n");
+
+            rotation_in_progress = 1;
+
+            initiate_e2e(
+                sockfd,
+                aes_key,
+                username,
+                e2e_peer,
+                &e2e_keypair,
+                &e2e_established,
+                e2e_peer
+            );
+        }
+        
         // Check keyboard
         if (FD_ISSET(STDIN_FILENO, &readfds)) {
 
@@ -1434,8 +1521,12 @@ int main() {
                     &e2e_keypair,
                     &e2e_shared_secret,
                     e2e_key,
+                    old_e2e_key,
+                    &old_key_valid,
                     &e2e_established,
-                    e2e_peer
+                    e2e_peer,
+                    &last_rotation,
+                    &rotation_in_progress
                 );
 
                 continue;
@@ -1450,7 +1541,11 @@ int main() {
                     &e2e_keypair,
                     &e2e_shared_secret,
                     e2e_key,
-                    &e2e_established
+                    old_e2e_key,
+                    &old_key_valid,
+                    &e2e_established,
+                    &last_rotation,
+                    &rotation_in_progress
                 );
 
                 continue;
@@ -1472,6 +1567,8 @@ int main() {
 
                 handle_e2e_message(
                     e2e_key,
+                    old_e2e_key,
+                    old_key_valid,
                     (char *)plaintext
                 );
 
