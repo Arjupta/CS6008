@@ -344,6 +344,22 @@ int perform_dh_handshake(
     return 1;
 }
 
+int send_all(int sockfd, const unsigned char *buf, int len)
+{
+    int total = 0;
+
+    while (total < len) {
+        int n = send(sockfd, buf + total, len - total, 0);
+
+        if (n <= 0)
+            return 0;
+
+        total += n;
+    }
+
+    return 1;
+}
+
 int recv_all(int sockfd, unsigned char *buf, int len)
 {
     int total = 0;
@@ -359,6 +375,7 @@ int recv_all(int sockfd, unsigned char *buf, int len)
 
     return 1;
 }
+
 int verify_server_certificate(int sockfd)
 {
     uint32_t cert_len_net;
@@ -456,8 +473,128 @@ int verify_server_certificate(int sockfd)
     printf("[CERT] Certificate verified successfully.\n");
 
     /*
-     * Proof-of-possession will be added here next.
+     * Proof-of-possession will be done here next.
      */
+
+    /* Generate a random challenge */
+    unsigned char challenge[32];
+
+    if (RAND_bytes(challenge, sizeof(challenge)) != 1) {
+        printf("[CERT] Failed to generate challenge.\n");
+
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    /* Send challenge length */
+    uint32_t challenge_len_net = htonl(sizeof(challenge));
+
+    if (!send_all(sockfd,
+                (unsigned char *)&challenge_len_net,
+                sizeof(challenge_len_net))) {
+
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    /* Send challenge */
+    if (!send_all(sockfd, challenge, sizeof(challenge))) {
+
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    printf("[CERT] Challenge sent to server.\n");
+
+    /* Receive signature length */
+    uint32_t signature_len_net;
+
+    if (!recv_all(sockfd,
+                (unsigned char *)&signature_len_net,
+                sizeof(signature_len_net))) {
+
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    uint32_t signature_len = ntohl(signature_len_net);
+
+    if (signature_len <= 0 || signature_len > 10000) {
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    /* Receive signature */
+    unsigned char *signature = malloc(signature_len);
+
+    if (!signature) {
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    if (!recv_all(sockfd, signature, signature_len)) {
+        free(signature);
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    /* Get server public key from certificate */
+    EVP_PKEY *server_public_key = X509_get_pubkey(cert);
+
+    if (!server_public_key) {
+        free(signature);
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    /* Verify server's signature */
+    EVP_MD_CTX *verify_ctx = EVP_MD_CTX_new();
+
+    if (!verify_ctx) {
+        EVP_PKEY_free(server_public_key);
+        free(signature);
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    if (EVP_DigestVerifyInit(
+            verify_ctx,
+            NULL,
+            EVP_sha256(),
+            NULL,
+            server_public_key) != 1 ||
+        EVP_DigestVerify(
+            verify_ctx,
+            signature,
+            signature_len,
+            challenge,
+            sizeof(challenge)) != 1) {
+
+        printf("[CERT] Server proof-of-possession FAILED.\n");
+
+        EVP_MD_CTX_free(verify_ctx);
+        EVP_PKEY_free(server_public_key);
+        free(signature);
+        X509_free(cert);
+        X509_free(ca_cert);
+
+        return 0;
+    }
+
+    printf("[CERT] Server proof-of-possession verified.\n");
+
+    EVP_MD_CTX_free(verify_ctx);
+    EVP_PKEY_free(server_public_key);
+    free(signature);
 
     X509_free(cert);
     X509_free(ca_cert);

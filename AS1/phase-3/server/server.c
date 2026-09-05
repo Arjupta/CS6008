@@ -7,8 +7,10 @@
 #include <sys/select.h>
 #include "../common/dh.h"
 #include "../common/crypto.h"
-#include <openssl/x509.h>
+#include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/rand.h>
 #include <arpa/inet.h>
 
 #define PORT 5000
@@ -227,6 +229,23 @@ int send_all(int sockfd, const unsigned char *buf, int len)
     return 1;
 }
 
+int recv_all(int sockfd, unsigned char *buf, int len)
+{
+    int total = 0;
+
+    while (total < len) {
+        int n = recv(sockfd, buf + total, len - total, 0);
+
+        if (n <= 0)
+            return 0;
+
+        total += n;
+    }
+
+    return 1;
+}
+
+
 int send_server_certificate(int sockfd)
 {
     FILE *file = fopen("server.crt", "r");
@@ -284,6 +303,160 @@ int send_server_certificate(int sockfd)
     X509_free(cert);
 
     printf("[CERT] Server certificate sent.\n");
+
+    return 1;
+}
+
+int sign_certificate_challenge(int sockfd)
+{
+    uint32_t challenge_len_net;
+
+    /* Receive challenge length */
+    if (!recv_all(sockfd,
+                  (unsigned char *)&challenge_len_net,
+                  sizeof(challenge_len_net))) {
+        return 0;
+    }
+
+    uint32_t challenge_len = ntohl(challenge_len_net);
+
+    if (challenge_len <= 0 || challenge_len > 1024) {
+        printf("[CERT] Invalid challenge length.\n");
+        return 0;
+    }
+
+    /* Receive challenge */
+    unsigned char *challenge = malloc(challenge_len);
+
+    if (!challenge)
+        return 0;
+
+    if (!recv_all(sockfd, challenge, challenge_len)) {
+        free(challenge);
+        return 0;
+    }
+
+    printf("[CERT] Challenge received.\n");
+
+    /* Load server private key */
+    FILE *key_file = fopen("server.key", "r");
+
+    if (!key_file) {
+        printf("[CERT] Could not open server.key.\n");
+        free(challenge);
+        return 0;
+    }
+
+    EVP_PKEY *server_key =
+        PEM_read_PrivateKey(key_file, NULL, NULL, NULL);
+
+    fclose(key_file);
+
+    if (!server_key) {
+        printf("[CERT] Could not load server private key.\n");
+        free(challenge);
+        return 0;
+    }
+
+    /* Create signature */
+    EVP_MD_CTX *sign_ctx = EVP_MD_CTX_new();
+
+    if (!sign_ctx) {
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    if (EVP_DigestSignInit(
+            sign_ctx,
+            NULL,
+            EVP_sha256(),
+            NULL,
+            server_key) != 1) {
+
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    if (EVP_DigestSignUpdate(
+            sign_ctx,
+            challenge,
+            challenge_len) != 1) {
+
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    /* First call obtains required signature size */
+    size_t signature_len = 0;
+
+    if (EVP_DigestSignFinal(
+            sign_ctx,
+            NULL,
+            &signature_len) != 1) {
+
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    unsigned char *signature = malloc(signature_len);
+
+    if (!signature) {
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    /* Generate actual signature */
+    if (EVP_DigestSignFinal(
+            sign_ctx,
+            signature,
+            &signature_len) != 1) {
+
+        free(signature);
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    /* Send signature length */
+    uint32_t signature_len_net = htonl(signature_len);
+
+    if (!send_all(sockfd,
+                  (unsigned char *)&signature_len_net,
+                  sizeof(signature_len_net))) {
+
+        free(signature);
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    /* Send signature */
+    if (!send_all(sockfd, signature, signature_len)) {
+
+        free(signature);
+        EVP_MD_CTX_free(sign_ctx);
+        EVP_PKEY_free(server_key);
+        free(challenge);
+        return 0;
+    }
+
+    printf("[CERT] Challenge signed and signature sent.\n");
+
+    free(signature);
+    EVP_MD_CTX_free(sign_ctx);
+    EVP_PKEY_free(server_key);
+    free(challenge);
 
     return 1;
 }
@@ -439,7 +612,14 @@ int main() {
 
                 if (!send_server_certificate(client_fd)) {
                     close(client_fd);
-                    // clean up client slot as your existing code does
+                    clients[slot].socket = -1;
+                    continue;
+                }
+
+                if (!sign_certificate_challenge(client_fd)) {
+                    printf("[CERT] Client authentication failed.\n");
+                    close(client_fd);
+                    clients[slot].socket = -1;
                     continue;
                 }
 
