@@ -22,6 +22,13 @@
 #define BUFFER_SIZE 1024
 #define USERNAME_SIZE 32
 
+static time_t monotonic_seconds(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec;
+}
+
 int send_message(int sockfd, const char *message)
 {
     char buffer[BUFFER_SIZE];
@@ -735,7 +742,8 @@ void handle_e2e_init(
     }
 
     /*
-    * Preserve the current key before installing the new one.
+    * Preserve the current key 
+    before installing the new one.
     */
     if (*e2e_established) {
         memcpy(old_e2e_key, e2e_key, 32);
@@ -788,7 +796,7 @@ void handle_e2e_init(
 
     *e2e_established = 1;
 
-    *last_rotation = time(NULL);
+    *last_rotation = monotonic_seconds();
     *rotation_in_progress = 0;
     
     printf("[E2E] Key exchange complete with %s.\n",
@@ -848,8 +856,10 @@ void handle_e2e_ack(
         return;
     }
 
-    memcpy(old_e2e_key, e2e_key, sizeof(e2e_key));
-    old_key_valid = 1;
+    if (*e2e_established) {
+        memcpy(old_e2e_key, e2e_key, 32);
+        *old_key_valid = 1;
+    }
 
     /* Derive E2E AES-256 key */
     if (!dh_derive_key(*e2e_shared_secret, e2e_key)) {
@@ -864,7 +874,7 @@ void handle_e2e_ack(
     // dh_print_fingerprint(*e2e_shared_secret);
 
     *e2e_established = 1;
-    *last_rotation = time(NULL);
+    *last_rotation = monotonic_seconds();
     *rotation_in_progress = 0;
 
     printf("[E2E] Key exchange complete with %s.\n",
@@ -1150,7 +1160,7 @@ int main() {
     int e2e_established = 0;
     char e2e_peer[USERNAME_SIZE];
 
-    time_t last_rotation = time(NULL);
+    time_t last_rotation = monotonic_seconds();
 
     while (1) {
         printf("Enter username: ");
@@ -1261,7 +1271,7 @@ int main() {
         if (e2e_established &&
             !rotation_in_progress &&
             strcmp(username, e2e_peer) < 0 &&
-            time(NULL) - last_rotation >= 60) {
+            monotonic_seconds() - last_rotation >= 60) {
 
             printf("[E2E] 60 seconds elapsed. Starting key rotation...\n");
 
@@ -1276,6 +1286,16 @@ int main() {
                 &e2e_established,
                 e2e_peer
             );
+        }
+
+        if (old_key_valid &&
+            !rotation_in_progress &&
+            monotonic_seconds() - last_rotation >= 5) {
+
+            OPENSSL_cleanse(old_e2e_key, 32);
+            old_key_valid = 0;
+
+            printf("[E2E] Previous key discarded.\n");
         }
         
         // Check keyboard
