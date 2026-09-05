@@ -14,10 +14,10 @@
 #include <openssl/rand.h>
 
 // Use this server for MITM attack 
-// #define SERVER_IP "10.129.27.78"
-// #define PORT 5001
-#define SERVER_IP "10.129.27.74"
-#define PORT 5000
+#define SERVER_IP "10.129.27.78"
+#define PORT 5001
+// #define SERVER_IP "10.129.27.74"
+// #define PORT 5000
 #define BUFFER_SIZE 1024
 #define USERNAME_SIZE 32
 
@@ -461,7 +461,7 @@ int verify_server_certificate(int sockfd)
     }
 
     /* Check expected server identity */
-    if (X509_check_ip_asc(cert, SERVER_IP, 0) != 1) {
+    if (X509_check_ip_asc(cert, "10.129.27.74", 0) != 1) {
 
         printf("[CERT] Certificate identity does not match server.\n");
 

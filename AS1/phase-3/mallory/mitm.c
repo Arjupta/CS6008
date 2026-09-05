@@ -5,9 +5,11 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/select.h>
-
 #include "../common/dh.h"
 #include "../common/crypto.h"
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <stdint.h>
 
 #define LISTEN_PORT 5001
 
@@ -414,6 +416,177 @@ int perform_dh_as_client(
     return 1;
 }
 
+int send_stolen_certificate(int client_sock)
+{
+    FILE *fp = fopen("server.crt", "rb");
+    if (!fp) {
+        perror("fopen server.crt");
+        return 0;
+    }
+
+    X509 *cert = PEM_read_X509(fp, NULL, NULL, NULL);
+    fclose(fp);
+
+    if (!cert) {
+        printf("[MITM] Failed to load server certificate.\n");
+        return 0;
+    }
+
+    int cert_len = i2d_X509(cert, NULL);
+
+    if (cert_len <= 0) {
+        X509_free(cert);
+        return 0;
+    }
+
+    unsigned char *der = malloc(cert_len);
+    unsigned char *ptr = der;
+
+    i2d_X509(cert, &ptr);
+
+    uint32_t net_len = htonl(cert_len);
+
+    if (send(client_sock, &net_len, sizeof(net_len), 0) <= 0 ||
+        send(client_sock, der, cert_len, 0) <= 0) {
+
+        free(der);
+        X509_free(cert);
+        return 0;
+    }
+
+    printf("[MITM] Sent copied legitimate server certificate.\n");
+
+    free(der);
+    X509_free(cert);
+
+    return 1;
+}
+
+int sign_challenge_with_mallory_key(
+    int client_sock
+)
+{
+    uint32_t net_len;
+    int challenge_len;
+
+    if (recv(client_sock, &net_len, sizeof(net_len), MSG_WAITALL) <= 0) {
+        return 0;
+    }
+
+    challenge_len = ntohl(net_len);
+
+    if (challenge_len <= 0 || challenge_len > 1024) {
+        return 0;
+    }
+
+    unsigned char challenge[1024];
+
+    if (recv(client_sock,
+             challenge,
+             challenge_len,
+             MSG_WAITALL) <= 0) {
+        return 0;
+    }
+
+    printf("[MITM] Received certificate challenge.\n");
+
+    FILE *fp = fopen("mallory.key", "r");
+
+    if (!fp) {
+        perror("fopen mallory.key");
+        return 0;
+    }
+
+    EVP_PKEY *mallory_key =
+        PEM_read_PrivateKey(fp, NULL, NULL, NULL);
+
+    fclose(fp);
+
+    if (!mallory_key) {
+        printf("[MITM] Failed to load Mallory private key.\n");
+        return 0;
+    }
+
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+
+    if (!ctx) {
+        EVP_PKEY_free(mallory_key);
+        return 0;
+    }
+
+    if (EVP_DigestSignInit(
+            ctx,
+            NULL,
+            EVP_sha256(),
+            NULL,
+            mallory_key) <= 0) {
+
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(mallory_key);
+        return 0;
+    }
+
+    if (EVP_DigestSignUpdate(
+            ctx,
+            challenge,
+            challenge_len) <= 0) {
+
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(mallory_key);
+        return 0;
+    }
+
+    size_t signature_len = 0;
+
+    if (EVP_DigestSignFinal(
+            ctx,
+            NULL,
+            &signature_len) <= 0) {
+
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(mallory_key);
+        return 0;
+    }
+
+    unsigned char *signature = malloc(signature_len);
+
+    if (!signature) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(mallory_key);
+        return 0;
+    }
+
+    if (EVP_DigestSignFinal(
+            ctx,
+            signature,
+            &signature_len) <= 0) {
+
+        free(signature);
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(mallory_key);
+        return 0;
+    }
+
+    uint32_t sig_net_len = htonl(signature_len);
+
+    send(client_sock,
+         &sig_net_len,
+         sizeof(sig_net_len),
+         0);
+
+    send(client_sock,
+         signature,
+         signature_len,
+         0);
+
+    printf("[MITM] Sent challenge signature using mallory.key.\n");
+
+    free(signature);
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(mallory_key);
+
+    return 1;
+}
 
 int main()
 {
@@ -516,6 +689,9 @@ int main()
 
     printf("[MITM] C1 connected.\n");
 
+    send_stolen_certificate(client_fd);
+
+    sign_challenge_with_mallory_key(client_fd);
 
     /*
      * =========================================================
