@@ -737,7 +737,7 @@ void handle_e2e_init(
     printf("[E2E] Shared secret established with %s.\n",
            e2e_peer);
 
-    printf("[E2E] Fingerprint: ");
+    // printf("[E2E] Fingerprint: ");
     // dh_print_fingerprint(*e2e_shared_secret);
 
     /* Convert our public key to hexadecimal */
@@ -836,13 +836,184 @@ void handle_e2e_ack(
     printf("[E2E] Shared secret established with %s.\n",
            peer_username);
 
-    printf("[E2E] Fingerprint: ");
+    // printf("[E2E] Fingerprint: ");
     // dh_print_fingerprint(*e2e_shared_secret);
 
     *e2e_established = 1;
 
     printf("[E2E] Key exchange complete with %s.\n",
            peer_username);
+}
+
+int send_e2e_message(
+    int sockfd,
+    const unsigned char *aes_key,
+    const unsigned char *e2e_key,
+    const char *target,
+    const char *message
+)
+{
+    unsigned char nonce[GCM_NONCE_SIZE];
+    unsigned char ciphertext[BUFFER_SIZE];
+    unsigned char tag[GCM_TAG_SIZE];
+
+    int plaintext_len = strlen(message);
+
+    /*
+     * Encrypt the actual chat message using the E2E key.
+     */
+    int ciphertext_len = aes_gcm_encrypt(
+        e2e_key,
+        (const unsigned char *)message,
+        plaintext_len,
+        nonce,
+        ciphertext,
+        tag
+    );
+
+    if (ciphertext_len <= 0) {
+        printf("[E2E] Encryption failed.\n");
+        return -1;
+    }
+
+    /*
+     * Convert nonce, ciphertext and tag to hexadecimal.
+     */
+    char nonce_hex[GCM_NONCE_SIZE * 2 + 1];
+    char ciphertext_hex[BUFFER_SIZE * 2 + 1];
+    char tag_hex[GCM_TAG_SIZE * 2 + 1];
+
+    for (int i = 0; i < GCM_NONCE_SIZE; i++)
+        sprintf(&nonce_hex[i * 2], "%02x", nonce[i]);
+
+    for (int i = 0; i < ciphertext_len; i++)
+        sprintf(&ciphertext_hex[i * 2], "%02x", ciphertext[i]);
+
+    for (int i = 0; i < GCM_TAG_SIZE; i++)
+        sprintf(&tag_hex[i * 2], "%02x", tag[i]);
+
+    nonce_hex[GCM_NONCE_SIZE * 2] = '\0';
+    ciphertext_hex[ciphertext_len * 2] = '\0';
+    tag_hex[GCM_TAG_SIZE * 2] = '\0';
+
+    // Uncomment this to check gcm verification for e2e
+    // ciphertext_hex[0] =(ciphertext_hex[0] == '0') ? '1' : '0';
+
+    /*
+     * Inner E2E packet.
+     *
+     * The server will see this after decrypting
+     * the outer client-server encryption.
+     */
+    char e2e_packet[BUFFER_SIZE * 3];
+
+    snprintf(
+        e2e_packet,
+        sizeof(e2e_packet),
+        "@%s __E2E_MSG__ %s %s %s",
+        target,
+        nonce_hex,
+        ciphertext_hex,
+        tag_hex
+    );
+
+    /*
+     * Now encrypt the E2E packet with the existing
+     * client-server AES key.
+     */
+    return send_encrypted_message(
+        sockfd,
+        aes_key,
+        e2e_packet
+    );
+}
+
+void handle_e2e_message(
+    const unsigned char *e2e_key,
+    char *message
+)
+{
+    char *type;
+    char *nonce_hex;
+    char *ciphertext_hex;
+    char *tag_hex;
+
+    unsigned char nonce[GCM_NONCE_SIZE];
+    unsigned char ciphertext[BUFFER_SIZE];
+    unsigned char tag[GCM_TAG_SIZE];
+    unsigned char plaintext[BUFFER_SIZE];
+
+    /*
+     * Expected format:
+     *
+     * __E2E_MSG__ nonce ciphertext tag
+     */
+
+    type = strtok(message, " ");
+    nonce_hex = strtok(NULL, " ");
+    ciphertext_hex = strtok(NULL, " ");
+    tag_hex = strtok(NULL, " \n");
+
+    if (type == NULL ||
+        nonce_hex == NULL ||
+        ciphertext_hex == NULL ||
+        tag_hex == NULL ||
+        strcmp(type, "__E2E_MSG__") != 0) {
+
+        printf("[E2E] Invalid E2E message.\n");
+        return;
+    }
+
+    /* Convert nonce */
+    for (int i = 0; i < GCM_NONCE_SIZE; i++) {
+        sscanf(
+            &nonce_hex[i * 2],
+            "%2hhx",
+            &nonce[i]
+        );
+    }
+
+    /* Convert ciphertext */
+    int ciphertext_len = strlen(ciphertext_hex) / 2;
+
+    for (int i = 0; i < ciphertext_len; i++) {
+        sscanf(
+            &ciphertext_hex[i * 2],
+            "%2hhx",
+            &ciphertext[i]
+        );
+    }
+
+    /* Convert authentication tag */
+    for (int i = 0; i < GCM_TAG_SIZE; i++) {
+        sscanf(
+            &tag_hex[i * 2],
+            "%2hhx",
+            &tag[i]
+        );
+    }
+
+    /*
+     * Decrypt and authenticate using the E2E key.
+     */
+    int plaintext_len = aes_gcm_decrypt(
+        e2e_key,
+        nonce,
+        ciphertext,
+        ciphertext_len,
+        tag,
+        plaintext
+    );
+
+    if (plaintext_len <= 0) {
+        printf("[E2E] Authentication failed.\n");
+        return;
+    }
+
+    plaintext[plaintext_len] = '\0';
+
+    printf("[E2E MESSAGE] %s\n", plaintext);
+    fflush(stdout);
 }
 
 int main() {
@@ -1112,6 +1283,7 @@ int main() {
             // -------------------------
             // @username message
             // -------------------------
+
             if (message[0] == '@') {
 
                 char routed_message[BUFFER_SIZE+1];
@@ -1121,14 +1293,54 @@ int main() {
                         "%s\n",
                         message);
 
-                if (send_encrypted_message(sockfd, aes_key, message) < 0) {
-                    perror("send");
-                    break;
+                char target[USERNAME_SIZE];
+
+                if (sscanf(message, "@%31s", target) == 1) {
+
+                    /*
+                    * If this target has an established E2E session,
+                    * encrypt the actual message using e2e_key.
+                    */
+                    if (e2e_established &&
+                        strcmp(target, e2e_peer) == 0) {
+
+                        char *actual_message = strchr(message, ' ');
+
+                        if (actual_message != NULL) {
+                            actual_message++;
+
+                            if (send_e2e_message(
+                                    sockfd,
+                                    aes_key,
+                                    e2e_key,
+                                    target,
+                                    actual_message
+                                ) < 0) {
+
+                                perror("[E2E] send");
+                                break;
+                            }
+                        }
+
+                    } else {
+
+                        /*
+                        * Existing client-server encrypted message.
+                        */
+                        if (send_encrypted_message(
+                                sockfd,
+                                aes_key,
+                                routed_message
+                            ) < 0) {
+
+                            perror("send");
+                            break;
+                        }
+                    }
                 }
 
                 continue;
             }
-
 
             // -------------------------
             // Normal message
@@ -1149,11 +1361,35 @@ int main() {
                     BUFFER_SIZE - USERNAME_SIZE - 3,
                     message);
 
-            if (send_encrypted_message(sockfd, aes_key, routed_message) < 0) {
-                perror("send");
-                break;
+            if (e2e_established &&
+                strcmp(current_chat, e2e_peer) == 0) {
+
+                if (send_e2e_message(
+                        sockfd,
+                        aes_key,
+                        e2e_key,
+                        current_chat,
+                        message
+                    ) < 0) {
+
+                    perror("[E2E] send");
+                    break;
+                }
+
+            } else {
+
+                if (send_encrypted_message(
+                        sockfd,
+                        aes_key,
+                        routed_message
+                    ) < 0) {
+
+                    perror("send");
+                    break;
+                }
             }
         }
+
         // Check server socket
         if (FD_ISSET(sockfd, &readfds)) {
 
@@ -1187,38 +1423,60 @@ int main() {
             plaintext[plaintext_len] = '\0';
 
             if (strncmp((char *)plaintext,
-                    "__E2E_INIT__",
-                    strlen("__E2E_INIT__")) == 0) {
+                        "__E2E_INIT__",
+                        strlen("__E2E_INIT__")) == 0) {
 
-            handle_e2e_init(
-                sockfd,
-                aes_key,
-                username,
-                (char *)plaintext,
-                &e2e_keypair,
-                &e2e_shared_secret,
-                e2e_key,
-                &e2e_established,
-                e2e_peer
-            );
+                handle_e2e_init(
+                    sockfd,
+                    aes_key,
+                    username,
+                    (char *)plaintext,
+                    &e2e_keypair,
+                    &e2e_shared_secret,
+                    e2e_key,
+                    &e2e_established,
+                    e2e_peer
+                );
 
-            continue;
-        }
+                continue;
+            }
 
-        if (strncmp((char *)plaintext,
-                    "__E2E_ACK__",
-                    strlen("__E2E_ACK__")) == 0) {
+            if (strncmp((char *)plaintext,
+                        "__E2E_ACK__",
+                        strlen("__E2E_ACK__")) == 0) {
 
-            handle_e2e_ack(
-                (char *)plaintext,
-                &e2e_keypair,
-                &e2e_shared_secret,
-                e2e_key,
-                &e2e_established
-            );
+                handle_e2e_ack(
+                    (char *)plaintext,
+                    &e2e_keypair,
+                    &e2e_shared_secret,
+                    e2e_key,
+                    &e2e_established
+                );
 
-            continue;
-        }
+                continue;
+            }
+
+            /*
+            * E2E encrypted message
+            */
+            if (strncmp(
+                    (char *)plaintext,
+                    "__E2E_MSG__",
+                    strlen("__E2E_MSG__")
+                ) == 0) {
+
+                if (!e2e_established) {
+                    printf("[E2E] Received E2E message but no E2E session exists.\n");
+                    continue;
+                }
+
+                handle_e2e_message(
+                    e2e_key,
+                    (char *)plaintext
+                );
+
+                continue;
+            }
 
             printf("[MESSAGE] %s\n", plaintext);
             fflush(stdout);
