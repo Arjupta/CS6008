@@ -846,26 +846,56 @@ int main() {
                         if (clients[j].socket != -1 &&
                             clients[j].registered &&
                             strcmp(clients[j].username, target) == 0) {
-                            
-                            char forwarded_message[BUFFER_SIZE];
 
-                            format_forwarded_message(
-                                clients[i].username,
-                                (char *)plaintext,
-                                forwarded_message
-                            );
-                            
-                            if (send_encrypted_message(
-                                    clients[j].socket,
-                                    clients[j].aes_key,
-                                    forwarded_message) < 0) {
-                                perror("send");
+                            /*
+                            * Phase 4 E2E messages must be forwarded
+                            * without modifying the encrypted payload.
+                            */
+                            if (strstr((char *)plaintext, "__E2E_") != NULL) {
+
+                                char *e2e_message = strchr((char *)plaintext, ' ');
+
+                                if (e2e_message != NULL) {
+                                    e2e_message++;   // Skip the space after @username
+
+                                    if (send_encrypted_message(
+                                            clients[j].socket,
+                                            clients[j].aes_key,
+                                            e2e_message) < 0) {
+                                        perror("send");
+                                    }
+                                }
+
+                                printf("[E2E RELAY] %s -> %s: %s\n",
+                                    clients[i].username,
+                                    target,
+                                    e2e_message ? e2e_message : "(invalid)");
+
+                            } else {
+
+                                /*
+                                * Existing normal chat behavior.
+                                */
+                                char forwarded_message[BUFFER_SIZE];
+
+                                format_forwarded_message(
+                                    clients[i].username,
+                                    (char *)plaintext,
+                                    forwarded_message
+                                );
+
+                                if (send_encrypted_message(
+                                        clients[j].socket,
+                                        clients[j].aes_key,
+                                        forwarded_message) < 0) {
+                                    perror("send");
+                                }
+
+                                printf("[MESSAGE] %s -> %s: %s\n",
+                                    clients[i].username,
+                                    target,
+                                    plaintext);
                             }
-
-                            printf("[MESSAGE] %s -> %s: %s\n",
-                                clients[i].username,
-                                target,
-                                plaintext);
 
                             break;
                         }
