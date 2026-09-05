@@ -50,6 +50,9 @@ int send_encrypted_message(
         tag
     );
 
+    // Uncomment this to fail 
+    ciphertext[0] ^= 0x01;
+
     if (ciphertext_len <= 0) {
         printf("[CRYPTO] Encryption failed.\n");
         return -1;
