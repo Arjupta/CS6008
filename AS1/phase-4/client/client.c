@@ -602,6 +602,249 @@ int verify_server_certificate(int sockfd)
     return 1;
 }
 
+void initiate_e2e(
+    int sockfd,
+    const unsigned char *aes_key,
+    const char *username,
+    const char *target,
+    DHKeyPair *e2e_keypair,
+    int *e2e_established,
+    char *e2e_peer
+)
+{
+    if (*e2e_established) {
+        printf("[E2E] E2E session already established with %s.\n",
+               e2e_peer);
+        return;
+    }
+
+    /* Generate E2E DH key pair */
+    if (!dh_generate_keypair(e2e_keypair)) {
+        printf("[E2E] Failed to generate key pair.\n");
+        return;
+    }
+
+    /* Remember who we are establishing E2E with */
+    strncpy(e2e_peer, target, USERNAME_SIZE - 1);
+    e2e_peer[USERNAME_SIZE - 1] = '\0';
+
+    /* Convert public key to hexadecimal */
+    char *public_hex = BN_bn2hex(e2e_keypair->public_key);
+
+    if (public_hex == NULL) {
+        printf("[E2E] Failed to convert public key.\n");
+        return;
+    }
+
+    /*
+     * Format:
+     *
+     * @target __E2E_INIT__ username public_key
+     */
+    char message[BUFFER_SIZE];
+
+    snprintf(
+        message,
+        sizeof(message),
+        "@%s __E2E_INIT__ %s %s",
+        target,
+        username,
+        public_hex
+    );
+
+    OPENSSL_free(public_hex);
+
+    /* Send using existing client-server AES key */
+    if (send_encrypted_message(sockfd, aes_key, message) < 0) {
+        perror("[E2E] send");
+        return;
+    }
+
+    printf("[E2E] Sent key exchange request to %s.\n", target);
+}
+
+void handle_e2e_init(
+    int sockfd,
+    const unsigned char *aes_key,
+    const char *username,
+    char *message,
+    DHKeyPair *e2e_keypair,
+    BIGNUM **e2e_shared_secret,
+    unsigned char *e2e_key,
+    int *e2e_established,
+    char *e2e_peer
+)
+{
+    char peer_username[USERNAME_SIZE];
+    char public_key_hex[BUFFER_SIZE];
+
+    /*
+     * Expected:
+     *
+     * __E2E_INIT__ peer_username public_key
+     */
+    if (sscanf(
+            message,
+            "__E2E_INIT__ %31s %1023s",
+            peer_username,
+            public_key_hex
+        ) != 2) {
+
+        printf("[E2E] Invalid E2E_INIT message.\n");
+        return;
+    }
+
+    /* Remember the peer */
+    strncpy(e2e_peer, peer_username, USERNAME_SIZE - 1);
+    e2e_peer[USERNAME_SIZE - 1] = '\0';
+
+    /* Convert peer public key from hexadecimal */
+    BIGNUM *peer_public_key = NULL;
+
+    if (!BN_hex2bn(&peer_public_key, public_key_hex)) {
+        printf("[E2E] Failed to parse peer public key.\n");
+        return;
+    }
+
+    /* Generate our E2E DH key pair */
+    if (!dh_generate_keypair(e2e_keypair)) {
+        printf("[E2E] Failed to generate key pair.\n");
+        BN_free(peer_public_key);
+        return;
+    }
+
+    /* Compute E2E shared secret */
+    *e2e_shared_secret =
+        dh_compute_shared_secret(
+            e2e_keypair->private_key,
+            peer_public_key
+        );
+
+    BN_free(peer_public_key);
+
+    if (*e2e_shared_secret == NULL) {
+        printf("[E2E] Failed to compute shared secret.\n");
+        dh_free_keypair(e2e_keypair);
+        return;
+    }
+
+    /* Derive AES-256 E2E key */
+    if (!dh_derive_key(*e2e_shared_secret, e2e_key)) {
+        printf("[E2E] Failed to derive E2E key.\n");
+        return;
+    }
+
+    printf("[E2E] Shared secret established with %s.\n",
+           e2e_peer);
+
+    printf("[E2E] Fingerprint: ");
+    // dh_print_fingerprint(*e2e_shared_secret);
+
+    /* Convert our public key to hexadecimal */
+    char *public_hex = BN_bn2hex(e2e_keypair->public_key);
+
+    if (public_hex == NULL) {
+        printf("[E2E] Failed to convert public key.\n");
+        return;
+    }
+
+    /*
+     * Send:
+     *
+     * @peer __E2E_ACK__ username public_key
+     */
+    char ack[BUFFER_SIZE];
+
+    snprintf(
+        ack,
+        sizeof(ack),
+        "@%s __E2E_ACK__ %s %s",
+        e2e_peer,
+        username,
+        public_hex
+    );
+
+    OPENSSL_free(public_hex);
+
+    /* Send ACK through existing encrypted connection */
+    if (send_encrypted_message(sockfd, aes_key, ack) < 0) {
+        perror("[E2E] ACK send");
+        return;
+    }
+
+    *e2e_established = 1;
+
+    printf("[E2E] Key exchange complete with %s.\n",
+           e2e_peer);
+}
+
+void handle_e2e_ack(
+    char *message,
+    DHKeyPair *e2e_keypair,
+    BIGNUM **e2e_shared_secret,
+    unsigned char *e2e_key,
+    int *e2e_established
+)
+{
+    char peer_username[USERNAME_SIZE];
+    char public_key_hex[BUFFER_SIZE];
+
+    /*
+     * Expected:
+     *
+     * __E2E_ACK__ peer_username public_key
+     */
+    if (sscanf(
+            message,
+            "__E2E_ACK__ %31s %1023s",
+            peer_username,
+            public_key_hex
+        ) != 2) {
+
+        printf("[E2E] Invalid E2E_ACK message.\n");
+        return;
+    }
+
+    /* Convert peer public key from hexadecimal */
+    BIGNUM *peer_public_key = NULL;
+
+    if (!BN_hex2bn(&peer_public_key, public_key_hex)) {
+        printf("[E2E] Failed to parse peer public key.\n");
+        return;
+    }
+
+    /* Compute shared secret */
+    *e2e_shared_secret =
+        dh_compute_shared_secret(
+            e2e_keypair->private_key,
+            peer_public_key
+        );
+
+    BN_free(peer_public_key);
+
+    if (*e2e_shared_secret == NULL) {
+        printf("[E2E] Failed to compute shared secret.\n");
+        return;
+    }
+
+    /* Derive E2E AES-256 key */
+    if (!dh_derive_key(*e2e_shared_secret, e2e_key)) {
+        printf("[E2E] Failed to derive E2E key.\n");
+        return;
+    }
+
+    printf("[E2E] Shared secret established with %s.\n",
+           peer_username);
+
+    printf("[E2E] Fingerprint: ");
+    // dh_print_fingerprint(*e2e_shared_secret);
+
+    *e2e_established = 1;
+
+    printf("[E2E] Key exchange complete with %s.\n",
+           peer_username);
+}
+
 int main() {
     int sockfd;
     struct sockaddr_in server_addr;
@@ -677,6 +920,13 @@ int main() {
     // Now proceed with username registration
 
     printf("[CONNECTED] Connected to server.\n");   
+
+    // Credential for e2e 
+    DHKeyPair e2e_keypair;
+    BIGNUM *e2e_shared_secret = NULL;
+    unsigned char e2e_key[32];
+    int e2e_established = 0;
+    char e2e_peer[USERNAME_SIZE];
 
     while (1) {
         printf("Enter username: ");
@@ -833,6 +1083,31 @@ int main() {
                 continue;
             }
 
+            // -------------------------
+            // /e2e username
+            // -------------------------
+            if (strncmp(message, "/e2e ", 5) == 0) {
+
+                char target[USERNAME_SIZE];
+
+                if (sscanf(message + 5, "%31s", target) == 1) {
+
+                    initiate_e2e(
+                        sockfd,
+                        aes_key,
+                        username,
+                        target,
+                        &e2e_keypair,
+                        &e2e_established,
+                        e2e_peer
+                    );
+
+                } else {
+                    printf("[ERROR] Usage: /e2e username\n");
+                }
+
+                continue;
+            }
 
             // -------------------------
             // @username message
@@ -910,6 +1185,40 @@ int main() {
             }
 
             plaintext[plaintext_len] = '\0';
+
+            if (strncmp((char *)plaintext,
+                    "__E2E_INIT__",
+                    strlen("__E2E_INIT__")) == 0) {
+
+            handle_e2e_init(
+                sockfd,
+                aes_key,
+                username,
+                (char *)plaintext,
+                &e2e_keypair,
+                &e2e_shared_secret,
+                e2e_key,
+                &e2e_established,
+                e2e_peer
+            );
+
+            continue;
+        }
+
+        if (strncmp((char *)plaintext,
+                    "__E2E_ACK__",
+                    strlen("__E2E_ACK__")) == 0) {
+
+            handle_e2e_ack(
+                (char *)plaintext,
+                &e2e_keypair,
+                &e2e_shared_secret,
+                e2e_key,
+                &e2e_established
+            );
+
+            continue;
+        }
 
             printf("[MESSAGE] %s\n", plaintext);
             fflush(stdout);
