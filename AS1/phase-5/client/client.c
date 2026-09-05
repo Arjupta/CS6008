@@ -760,7 +760,7 @@ void handle_e2e_init(
            e2e_peer);
 
     // printf("[E2E] Fingerprint: ");
-    // dh_print_fingerprint(*e2e_shared_secret);
+    dh_print_fingerprint(*e2e_shared_secret);
 
     /* Convert our public key to hexadecimal */
     char *public_hex = BN_bn2hex(e2e_keypair->public_key);
@@ -871,7 +871,7 @@ void handle_e2e_ack(
            peer_username);
 
     // printf("[E2E] Fingerprint: ");
-    // dh_print_fingerprint(*e2e_shared_secret);
+    dh_print_fingerprint(*e2e_shared_secret);
 
     *e2e_established = 1;
     *last_rotation = monotonic_seconds();
