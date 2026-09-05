@@ -8,8 +8,11 @@
 #include "../common/dh.h"
 #include "../common/crypto.h"
 
-#define SERVER_IP "10.129.27.74"
-#define PORT 5000
+// Use this server for MITM attack 
+#define SERVER_IP "10.129.27.78"
+#define PORT 5001
+// #define SERVER_IP "10.129.27.74"
+// #define PORT 5000
 #define BUFFER_SIZE 1024
 #define USERNAME_SIZE 32
 
@@ -51,7 +54,7 @@ int send_encrypted_message(
     );
 
     // Uncomment this to fail 
-    ciphertext[0] ^= 0x01;
+    // ciphertext[0] ^= 0x01;
 
     if (ciphertext_len <= 0) {
         printf("[CRYPTO] Encryption failed.\n");

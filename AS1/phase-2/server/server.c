@@ -552,7 +552,7 @@ int main() {
                 continue;
             }
 
-            printf("[MESSAGE] %s: %s",
+            printf("[MESSAGE] %s: %s\n",
                 clients[i].username,
                 plaintext);
 
@@ -596,7 +596,7 @@ int main() {
                                 perror("send");
                             }
 
-                            printf("[MESSAGE] %s -> %s: %s",
+                            printf("[MESSAGE] %s -> %s: %s\n",
                                 clients[i].username,
                                 target,
                                 plaintext);
