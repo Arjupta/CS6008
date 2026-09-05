@@ -7,6 +7,11 @@
 #include <sys/select.h>
 #include "../common/dh.h"
 #include "../common/crypto.h"
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+#include <openssl/pem.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 
 // Use this server for MITM attack 
 // #define SERVER_IP "10.129.27.78"
@@ -339,6 +344,127 @@ int perform_dh_handshake(
     return 1;
 }
 
+int recv_all(int sockfd, unsigned char *buf, int len)
+{
+    int total = 0;
+
+    while (total < len) {
+        int n = recv(sockfd, buf + total, len - total, 0);
+
+        if (n <= 0)
+            return 0;
+
+        total += n;
+    }
+
+    return 1;
+}
+int verify_server_certificate(int sockfd)
+{
+    uint32_t cert_len_net;
+    uint32_t cert_len;
+
+    /* Receive certificate length */
+    if (!recv_all(sockfd, (unsigned char *)&cert_len_net, sizeof(cert_len_net)))
+        return 0;
+
+    cert_len = ntohl(cert_len_net);
+
+    if (cert_len <= 0 || cert_len > 100000)
+        return 0;
+
+    /* Receive DER certificate */
+    unsigned char *cert_data = malloc(cert_len);
+
+    if (!cert_data)
+        return 0;
+
+    if (!recv_all(sockfd, cert_data, cert_len)) {
+        free(cert_data);
+        return 0;
+    }
+
+    /* Convert DER data to X509 certificate */
+    const unsigned char *p = cert_data;
+    X509 *cert = d2i_X509(NULL, &p, cert_len);
+
+    free(cert_data);
+
+    if (!cert) {
+        printf("[CERT] Could not parse certificate.\n");
+        return 0;
+    }
+
+    /* Load trusted CA */
+    FILE *ca_file = fopen("../ca/ca.crt", "r");
+
+    if (!ca_file) {
+        printf("[CERT] Could not open CA certificate.\n");
+        X509_free(cert);
+        return 0;
+    }
+
+    X509 *ca_cert = PEM_read_X509(ca_file, NULL, NULL, NULL);
+    fclose(ca_file);
+
+    if (!ca_cert) {
+        X509_free(cert);
+        return 0;
+    }
+
+    /* Verify that server certificate was signed by our CA */
+    EVP_PKEY *ca_key = X509_get_pubkey(ca_cert);
+
+    if (!ca_key) {
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    if (X509_verify(cert, ca_key) != 1) {
+        printf("[CERT] Certificate signature verification failed.\n");
+
+        EVP_PKEY_free(ca_key);
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    EVP_PKEY_free(ca_key);
+
+    /* Check certificate validity period */
+    if (X509_cmp_current_time(X509_get0_notBefore(cert)) > 0 ||
+        X509_cmp_current_time(X509_get0_notAfter(cert)) < 0) {
+
+        printf("[CERT] Certificate is expired or not yet valid.\n");
+
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    /* Check expected server identity */
+    if (X509_check_ip_asc(cert, SERVER_IP, 0) != 1) {
+
+        printf("[CERT] Certificate identity does not match server.\n");
+
+        X509_free(cert);
+        X509_free(ca_cert);
+        return 0;
+    }
+
+    printf("[CERT] Certificate verified successfully.\n");
+
+    /*
+     * Proof-of-possession will be added here next.
+     */
+
+    X509_free(cert);
+    X509_free(ca_cert);
+
+    return 1;
+}
+
 int main() {
     int sockfd;
     struct sockaddr_in server_addr;
@@ -376,6 +502,12 @@ int main() {
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)) < 0) {
         perror("connect");
+        close(sockfd);
+        return 1;
+    }
+
+    if (!verify_server_certificate(sockfd)) {
+        printf("[CERT] Server authentication failed.\n");
         close(sockfd);
         return 1;
     }

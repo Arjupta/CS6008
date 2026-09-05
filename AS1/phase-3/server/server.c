@@ -7,6 +7,9 @@
 #include <sys/select.h>
 #include "../common/dh.h"
 #include "../common/crypto.h"
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <arpa/inet.h>
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
@@ -208,6 +211,83 @@ void format_forwarded_message(
     );
 }
 
+int send_all(int sockfd, const unsigned char *buf, int len)
+{
+    int total = 0;
+
+    while (total < len) {
+        int n = send(sockfd, buf + total, len - total, 0);
+
+        if (n <= 0)
+            return 0;
+
+        total += n;
+    }
+
+    return 1;
+}
+
+int send_server_certificate(int sockfd)
+{
+    FILE *file = fopen("server.crt", "r");
+
+    if (!file) {
+        printf("[CERT] Could not open server.crt.\n");
+        return 0;
+    }
+
+    X509 *cert = PEM_read_X509(file, NULL, NULL, NULL);
+    fclose(file);
+
+    if (!cert) {
+        printf("[CERT] Could not load server certificate.\n");
+        return 0;
+    }
+
+    /* Convert certificate to DER */
+    int cert_len = i2d_X509(cert, NULL);
+
+    if (cert_len <= 0) {
+        X509_free(cert);
+        return 0;
+    }
+
+    unsigned char *cert_data = malloc(cert_len);
+
+    if (!cert_data) {
+        X509_free(cert);
+        return 0;
+    }
+
+    unsigned char *p = cert_data;
+    i2d_X509(cert, &p);
+
+    /* Send certificate length */
+    uint32_t cert_len_net = htonl(cert_len);
+
+    if (!send_all(sockfd,
+                  (unsigned char *)&cert_len_net,
+                  sizeof(cert_len_net))) {
+        free(cert_data);
+        X509_free(cert);
+        return 0;
+    }
+
+    /* Send certificate */
+    if (!send_all(sockfd, cert_data, cert_len)) {
+        free(cert_data);
+        X509_free(cert);
+        return 0;
+    }
+
+    free(cert_data);
+    X509_free(cert);
+
+    printf("[CERT] Server certificate sent.\n");
+
+    return 1;
+}
+
 int main() {
     int server_fd;
     struct sockaddr_in server_addr;
@@ -356,6 +436,12 @@ int main() {
                         temp_hex);
 
                 OPENSSL_free(temp_hex);
+
+                if (!send_server_certificate(client_fd)) {
+                    close(client_fd);
+                    // clean up client slot as your existing code does
+                    continue;
+                }
 
                 if (send(client_fd,
                         public_key_hex,
