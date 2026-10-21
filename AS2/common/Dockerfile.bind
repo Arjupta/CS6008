@@ -1,0 +1,23 @@
+FROM ubuntu:24.04
+
+# Tools needed just to fetch and trust ISC's package signing key
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    gnupg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add ISC's official BIND 9.20 PPA (signing key + repo definition)
+RUN install -d -m 0755 /etc/apt/keyrings \
+    && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x66150059ED19A2882208E278A36654A4FDD4630D' \
+       | gpg --dearmor -o /etc/apt/keyrings/isc-bind.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/isc-bind.gpg] https://ppa.launchpadcontent.net/isc/bind/ubuntu noble main" \
+       > /etc/apt/sources.list.d/isc-bind.list
+
+# Now install BIND itself, this time from ISC's repo instead of Ubuntu's default one
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bind9 \
+    bind9utils \
+    bind9-dnsutils \
+    iproute2 \
+    && rm -rf /var/lib/apt/lists/*
