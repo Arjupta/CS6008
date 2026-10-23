@@ -1,0 +1,14 @@
+own MAC on eth0: 8e:8d:34:bd:e2:38
+interceptor up on eth0, client=172.16.1.10 (relayed via raw IP_HDRINCL socket), target=example.com. rogue=172.16.1.30, toggle=/tmp/forge_enabled
+[relay] 172.16.2.10:53 -> 172.16.1.10:38173 qr=1 qd=1 an=1  (seen=1 relayed=1 forged=0)
+[relay] 172.16.2.10:53 -> 172.16.1.10:38173 qr=1 qd=1 an=0  (seen=2 relayed=2 forged=0)
+[relay] 172.16.2.10:53 -> 172.16.1.10:41862 qr=1 qd=1 an=1  (seen=3 relayed=3 forged=0)
+[FORGE+AD] 172.16.2.10:53 -> 172.16.1.10:38404 qr=1 qd=1 an=1  (seen=4 relayed=4 forged=1)
+[relay] 172.16.2.10:53 -> 172.16.1.10:38404 qr=1 qd=1 an=0  (seen=5 relayed=5 forged=1)
+[FORGE+AD] 172.16.2.10:53 -> 172.16.1.10:34923 qr=1 qd=1 an=1  (seen=6 relayed=6 forged=2)
+[FORGE+AD] 172.16.2.10:53 -> 172.16.1.10:37797 qr=1 qd=1 an=2  (seen=7 relayed=7 forged=3)
+[relay] 172.16.2.10:53 -> 172.16.1.10:36028 qr=1 qd=1 an=4  (seen=8 relayed=8 forged=3)
+[relay] 172.16.2.10:53 -> 172.16.1.10:52145 qr=1 qd=1 an=2  (seen=9 relayed=9 forged=3)
+[relay] 172.16.2.10:53 -> 172.16.1.10:60299 qr=1 qd=1 an=4  (seen=10 relayed=10 forged=3)
+[relay] 172.16.2.10:53 -> 172.16.1.10:53541 qr=1 qd=1 an=2  (seen=11 relayed=11 forged=3)
+[relay] 172.16.2.10:53 -> 172.16.1.10:57186 qr=1 qd=1 an=4  (seen=12 relayed=12 forged=3)

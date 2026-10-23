@@ -6,4 +6,4 @@
 */*.signed
 resolver/trust-anchor.conf
 client/trust-anchor.conf
-evidence/
+

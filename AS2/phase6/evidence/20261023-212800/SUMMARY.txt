@@ -1,0 +1,22 @@
+Phase 6 evidence capture -- Fri Oct 23 09:29:58 PM IST 2026
+
+Verify (forging off): curl http_code=200 | dig +short -> 172.16.1.20
+
+Client A (ordinary stub, curl via OS resolver), forging on:
+  curl: http_code=200
+  dig:  ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 9102
+        flags: qr rd ra ad
+  expected: curl lands on the rogue page (172.16.1.30), dig shows the
+  forged A record with the 'ad' flag set by the ATTACKER (not earned --
+  see interceptor.c's header comment and the README).
+
+Client B (delv, independently validating against its own trust anchor):
+  ;; validating example.com/A: no valid signature found
+;; RRSIG failed to verify resolving 'example.com/A/IN': 172.16.2.10#53
+;; resolution failed: RRSIG failed to verify
+  expected: validation fails -- the forged rdata doesn't match the real,
+  untouched RRSIG the resolver forwarded, so Client B's own re-validation
+  (not the resolver's, not the 'ad' flag) catches it.
+
+Files: verify_curl.txt, verify_dig.txt, clientA_curl.txt, clientA_dig.txt,
+clientB_delv.txt, attacker_log.txt.

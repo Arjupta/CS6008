@@ -1,0 +1,3 @@
+;; validating example.com/A: no valid signature found
+;; RRSIG failed to verify resolving 'example.com/A/IN': 172.16.2.10#53
+;; resolution failed: RRSIG failed to verify
