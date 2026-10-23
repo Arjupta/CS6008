@@ -1,0 +1,427 @@
+Linktype: 1 (113 = Linux cooked / SLL)
+
+=== Packet 1  t=1792758953.671845  172.16.1.10:40983 -> 172.16.2.10:53 ===
+  QUERY  id=38066  flags=rd  rcode=0
+  Q: example.com. A
+
+=== Packet 2  t=1792758953.672609  172.16.2.10:37088 -> 172.16.3.10:53 ===
+  QUERY  id=9086  flags=(none)  rcode=0
+  Q: . NS
+
+=== Packet 3  t=1792758953.672653  172.16.2.10:46740 -> 172.16.3.10:53 ===
+  QUERY  id=8672  flags=(none)  rcode=0
+  Q: com. NS
+
+=== Packet 4  t=1792758953.672721  172.16.3.10:53 -> 172.16.2.10:37088 ===
+  RESPONSE  id=9086  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 5  t=1792758953.672725  172.16.3.10:53 -> 172.16.2.10:46740 ===
+  RESPONSE  id=8672  flags=(none)  rcode=0
+  Q: com. NS
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 6  t=1792758954.251383  172.16.3.10:53 -> 172.16.2.10:54227 ===
+  RESPONSE  id=24220  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 7  t=1792758954.251410  172.16.3.10:53 -> 172.16.2.10:42409 ===
+  RESPONSE  id=228  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 8  t=1792758954.251969  172.16.3.20:53 -> 172.16.2.10:39231 ===
+  RESPONSE  id=553  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 9  t=1792758955.053149  172.16.3.10:53 -> 172.16.2.10:38005 ===
+  RESPONSE  id=49043  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 10  t=1792758955.053149  172.16.3.10:53 -> 172.16.2.10:53825 ===
+  RESPONSE  id=1058  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 11  t=1792758955.053253  172.16.3.10:53 -> 172.16.2.10:34518 ===
+  RESPONSE  id=42108  flags=aa  rcode=0
+  Q: root-ns.cs6008.local. AAAA
+  AUTHORITY: . SOA (SOA)
+
+=== Packet 12  t=1792758955.053737  172.16.3.20:53 -> 172.16.2.10:53762 ===
+  RESPONSE  id=47268  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 13  t=1792758955.251901  172.16.3.20:53 -> 172.16.2.10:41620 ===
+  RESPONSE  id=49189  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 14  t=1792758955.252196  172.16.3.30:53 -> 172.16.2.10:46135 ===
+  RESPONSE  id=6986  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.20
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 15  t=1792758956.053419  172.16.3.10:53 -> 172.16.2.10:38138 ===
+  RESPONSE  id=31404  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 16  t=1792758956.053434  172.16.3.10:53 -> 172.16.2.10:36031 ===
+  RESPONSE  id=56486  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 17  t=1792758956.053878  172.16.3.30:53 -> 172.16.2.10:47785 ===
+  RESPONSE  id=4555  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.20
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 18  t=1792758956.053878  172.16.3.20:53 -> 172.16.2.10:37719 ===
+  RESPONSE  id=4123  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 19  t=1792758956.251182  172.16.3.20:53 -> 172.16.2.10:37686 ===
+  RESPONSE  id=42623  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 20  t=1792758957.053540  172.16.3.20:53 -> 172.16.2.10:41401 ===
+  RESPONSE  id=32097  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 21  t=1792758957.251804  172.16.3.30:53 -> 172.16.2.10:44149 ===
+  RESPONSE  id=29025  flags=aa  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. SOA (SOA)
+
+=== Packet 22  t=1792758958.053295  172.16.3.30:53 -> 172.16.2.10:53099 ===
+  RESPONSE  id=35082  flags=aa  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. SOA (SOA)
+
+=== Packet 23  t=1792759179.252823  172.16.3.10:53 -> 172.16.2.10:42123 ===
+  RESPONSE  id=41726  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 24  t=1792759179.252823  172.16.3.10:53 -> 172.16.2.10:60122 ===
+  RESPONSE  id=13992  flags=(none)  rcode=0
+  Q: com. NS
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 25  t=1792759180.053424  172.16.3.10:53 -> 172.16.2.10:49273 ===
+  RESPONSE  id=24269  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 26  t=1792759180.053480  172.16.3.10:53 -> 172.16.2.10:43793 ===
+  RESPONSE  id=54207  flags=aa  rcode=0
+  Q: root-ns.cs6008.local. AAAA
+  AUTHORITY: . SOA (SOA)
+
+=== Packet 27  t=1792759180.053655  172.16.3.10:53 -> 172.16.2.10:37380 ===
+  RESPONSE  id=58925  flags=(none)  rcode=0
+  Q: com. NS
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 28  t=1792759180.251693  172.16.3.10:53 -> 172.16.2.10:38894 ===
+  RESPONSE  id=8500  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 29  t=1792759180.251753  172.16.3.10:53 -> 172.16.2.10:56173 ===
+  RESPONSE  id=31606  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 30  t=1792759180.252277  172.16.3.20:53 -> 172.16.2.10:57173 ===
+  RESPONSE  id=40309  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 31  t=1792759181.052916  172.16.3.10:53 -> 172.16.2.10:58154 ===
+  RESPONSE  id=37610  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 32  t=1792759181.052916  172.16.3.10:53 -> 172.16.2.10:59668 ===
+  RESPONSE  id=10988  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 33  t=1792759181.053567  172.16.3.20:53 -> 172.16.2.10:44075 ===
+  RESPONSE  id=19572  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 34  t=1792759181.251540  172.16.3.30:53 -> 172.16.2.10:43886 ===
+  RESPONSE  id=48285  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.30
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 35  t=1792759181.251944  172.16.3.20:53 -> 172.16.2.10:46095 ===
+  RESPONSE  id=22061  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 36  t=1792759182.052767  172.16.3.10:53 -> 172.16.2.10:60616 ===
+  RESPONSE  id=35807  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 37  t=1792759182.052767  172.16.3.10:53 -> 172.16.2.10:53946 ===
+  RESPONSE  id=42055  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 38  t=1792759182.053271  172.16.3.30:53 -> 172.16.2.10:38485 ===
+  RESPONSE  id=41519  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.30
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 39  t=1792759182.053316  172.16.3.20:53 -> 172.16.2.10:37831 ===
+  RESPONSE  id=14167  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 40  t=1792759182.251283  172.16.3.20:53 -> 172.16.2.10:51494 ===
+  RESPONSE  id=32980  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 41  t=1792759183.052991  172.16.3.20:53 -> 172.16.2.10:44355 ===
+  RESPONSE  id=63194  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 42  t=1792759183.251767  172.16.3.30:53 -> 172.16.2.10:48810 ===
+  RESPONSE  id=42002  flags=aa  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. SOA (SOA)
+
+=== Packet 43  t=1792759184.053262  172.16.3.30:53 -> 172.16.2.10:41243 ===
+  RESPONSE  id=26164  flags=aa  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. SOA (SOA)
+
+=== Packet 44  t=1792759962.878882  172.16.3.10:53 -> 172.16.2.10:45562 ===
+  RESPONSE  id=852  flags=(none)  rcode=0
+  Q: com. NS
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 45  t=1792759962.878882  172.16.3.10:53 -> 172.16.2.10:57591 ===
+  RESPONSE  id=21434  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 46  t=1792759963.251348  172.16.3.20:53 -> 172.16.2.10:33916 ===
+  RESPONSE  id=20589  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 47  t=1792759963.251430  172.16.3.10:53 -> 172.16.2.10:39334 ===
+  RESPONSE  id=49575  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 48  t=1792759963.251486  172.16.3.10:53 -> 172.16.2.10:33833 ===
+  RESPONSE  id=56752  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 49  t=1792759964.053226  172.16.3.20:53 -> 172.16.2.10:58507 ===
+  RESPONSE  id=4254  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 50  t=1792759964.053241  172.16.3.10:53 -> 172.16.2.10:47932 ===
+  RESPONSE  id=59008  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 51  t=1792759964.053241  172.16.3.10:53 -> 172.16.2.10:53388 ===
+  RESPONSE  id=8835  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 52  t=1792759964.053333  172.16.3.10:53 -> 172.16.2.10:52806 ===
+  RESPONSE  id=4086  flags=aa  rcode=0
+  Q: root-ns.cs6008.local. AAAA
+  AUTHORITY: . SOA (SOA)
+
+=== Packet 53  t=1792759964.251566  172.16.3.20:53 -> 172.16.2.10:49947 ===
+  RESPONSE  id=43790  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 54  t=1792759964.252266  172.16.3.30:53 -> 172.16.2.10:54054 ===
+  RESPONSE  id=44337  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.20
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 55  t=1792759965.053094  172.16.3.20:53 -> 172.16.2.10:47954 ===
+  RESPONSE  id=8879  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 56  t=1792759965.053132  172.16.3.10:53 -> 172.16.2.10:44190 ===
+  RESPONSE  id=64510  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 57  t=1792759965.053139  172.16.3.10:53 -> 172.16.2.10:33919 ===
+  RESPONSE  id=1121  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 58  t=1792759965.053688  172.16.3.30:53 -> 172.16.2.10:47277 ===
+  RESPONSE  id=50072  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.20
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 59  t=1792759965.251477  172.16.3.20:53 -> 172.16.2.10:45856 ===
+  RESPONSE  id=59727  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 60  t=1792759969.806474  172.16.3.10:53 -> 172.16.2.10:38290 ===
+  RESPONSE  id=38883  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 61  t=1792759969.806479  172.16.3.10:53 -> 172.16.2.10:43467 ===
+  RESPONSE  id=19873  flags=(none)  rcode=0
+  Q: com. NS
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 62  t=1792759970.251358  172.16.3.20:53 -> 172.16.2.10:59261 ===
+  RESPONSE  id=21987  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 63  t=1792759970.251427  172.16.3.10:53 -> 172.16.2.10:38718 ===
+  RESPONSE  id=48980  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 64  t=1792759970.251464  172.16.3.10:53 -> 172.16.2.10:45560 ===
+  RESPONSE  id=2009  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 65  t=1792759971.053389  172.16.3.20:53 -> 172.16.2.10:50872 ===
+  RESPONSE  id=21333  flags=(none)  rcode=0
+  Q: example.com. A
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 66  t=1792759971.053412  172.16.3.10:53 -> 172.16.2.10:43922 ===
+  RESPONSE  id=7499  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 67  t=1792759971.053413  172.16.3.10:53 -> 172.16.2.10:34265 ===
+  RESPONSE  id=21157  flags=(none)  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 68  t=1792759971.053506  172.16.3.10:53 -> 172.16.2.10:45952 ===
+  RESPONSE  id=24735  flags=aa  rcode=0
+  Q: root-ns.cs6008.local. AAAA
+  AUTHORITY: . SOA (SOA)
+
+=== Packet 69  t=1792759971.251311  172.16.3.30:53 -> 172.16.2.10:57475 ===
+  RESPONSE  id=57891  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.30
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 70  t=1792759971.251536  172.16.3.20:53 -> 172.16.2.10:58930 ===
+  RESPONSE  id=4792  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 71  t=1792759972.053439  172.16.3.10:53 -> 172.16.2.10:56368 ===
+  RESPONSE  id=10757  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: com. NS tld-ns.com.
+  ADDITIONAL: tld-ns.com. A 172.16.3.20
+
+=== Packet 72  t=1792759972.053453  172.16.3.10:53 -> 172.16.2.10:47473 ===
+  RESPONSE  id=50540  flags=aa  rcode=0
+  Q: . NS
+  ANSWER: . NS root-ns.cs6008.local.
+
+=== Packet 73  t=1792759972.053859  172.16.3.30:53 -> 172.16.2.10:35871 ===
+  RESPONSE  id=39045  flags=aa  rcode=0
+  Q: example.com. A
+  ANSWER: example.com. A 172.16.1.30
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 74  t=1792759972.053947  172.16.3.20:53 -> 172.16.2.10:44316 ===
+  RESPONSE  id=42804  flags=aa  rcode=0
+  Q: tld-ns.com. AAAA
+  AUTHORITY: com. SOA (SOA)
+
+=== Packet 75  t=1792759972.251185  172.16.3.20:53 -> 172.16.2.10:40663 ===
+  RESPONSE  id=17637  flags=(none)  rcode=0
+  Q: domain-ns.example.com. AAAA
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
+
+=== Packet 76  t=1792759972.362723  172.16.3.30:53 -> 172.16.2.10:38409 ===
+  RESPONSE  id=14986  flags=aa  rcode=0
+  Q: www.example.com. A
+  ANSWER: www.example.com. A 172.16.1.20
+  AUTHORITY: example.com. NS domain-ns.example.com.
+  ADDITIONAL: domain-ns.example.com. A 172.16.3.30
