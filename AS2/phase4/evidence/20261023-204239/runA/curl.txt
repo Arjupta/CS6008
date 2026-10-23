@@ -1,0 +1,2 @@
+http_code=000
+http_code=(curl failed/timed out)

@@ -1,0 +1,13 @@
+zonewalk: iface=eth0 domain-ns=172.16.3.30 start=example.com. max_steps=50
+RECOVERED NAMES:
+  [query 1] example.com.                     -> next: db1.example.com.
+  [query 2] db1.example.com.                 -> next: dev.example.com.
+  [query 3] dev.example.com.                 -> next: domain-ns.example.com.
+  [query 4] domain-ns.example.com.           -> next: mail.example.com.
+  [query 5] mail.example.com.                -> next: staging.example.com.
+  [query 6] staging.example.com.             -> next: vpn.example.com.
+  [query 7] vpn.example.com.                 -> next: www.example.com.
+  [query 8] www.example.com.                 -> next: example.com.
+  ring closed back at example.com. -- zone fully walked.
+
+Total owner names visited (ring steps): 8

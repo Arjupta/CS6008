@@ -1,0 +1,25 @@
+Phase 4 evidence capture -- Fri Oct 23 08:45:42 PM IST 2026
+
+RUN A (full chain, DS published at every level; strip+forge attack):
+  pre-attack dig: ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 61531
+                  flags: qr rd ra ad
+  attack dig:     ;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 13621
+  attack curl:    http_code=000
+http_code=(curl failed/timed out)
+  expected: dig SERVFAIL, curl fails -- stripping bytes off a real signed
+  zone is not the same as a genuine unsigned/insecure proof; resolver
+  notices data is missing where it expected signed data and rejects it.
+
+RUN B (example.com signed, com publishes NO DS for it; same strip+forge attack):
+  pre-attack dig: ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38470
+                  flags: qr rd ra
+  attack dig:     ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 19617
+  attack curl:    http_code=200
+  expected: dig returns 172.16.1.30 (the forged address), no 'ad' flag even
+  pre-attack -- the resolver already treats example.com as insecure before
+  the attacker does anything, because com never published its DS. Once a
+  zone is insecure, the resolver doesn't demand or check signatures on it
+  at all, so the Phase-2-style forged A record is simply accepted.
+
+Files: runA/ and runB/, each with verify_dig.txt, dig.txt, curl.txt,
+<run>_attack.pcap, attacker_log.txt.

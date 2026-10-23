@@ -1,0 +1,22 @@
+
+; <<>> DiG 9.18.39-0ubuntu0.24.04.8-Ubuntu <<>> +dnssec example.com @172.16.2.10
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 61531
+;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags: do; udp: 1232
+; COOKIE: fbc947fd2d487621010000006adb79d762f0710330d8b6a8 (good)
+;; QUESTION SECTION:
+;example.com.			IN	A
+
+;; ANSWER SECTION:
+example.com.		86400	IN	A	172.16.1.20
+example.com.		86400	IN	RRSIG	A 13 2 86400 20261122141246 20261023141246 40927 example.com. Iy5j2yI7w7CNVzt66nYuw+L5trez3bZtZbbaRVbMGUipm+miXjXxilPO pXz88RyYaQgJliGQ4gC66VRZSuwOMg==
+
+;; Query time: 4969 msec
+;; SERVER: 172.16.2.10#53(172.16.2.10) (UDP)
+;; WHEN: Fri Oct 23 15:14:31 UTC 2026
+;; MSG SIZE  rcvd: 191
+

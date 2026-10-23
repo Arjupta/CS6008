@@ -1,0 +1,5 @@
+zonewalk: iface=eth0 domain-ns=172.16.3.30 start=example.com. max_steps=50
+RECOVERED NAMES:
+  [query 1] example.com.                     -> NODATA (no NSEC RRset at this name; walk stops here)
+
+Total owner names visited (ring steps): 0

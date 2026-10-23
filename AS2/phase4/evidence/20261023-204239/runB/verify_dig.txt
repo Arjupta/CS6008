@@ -1,0 +1,23 @@
+;; communications error to 172.16.2.10#53: timed out
+
+; <<>> DiG 9.18.39-0ubuntu0.24.04.8-Ubuntu <<>> +dnssec example.com @172.16.2.10
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38470
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags: do; udp: 1232
+; COOKIE: ee6c9d1c20339cb2010000006adb7a0b83f129d1d8c8ffe8 (good)
+;; QUESTION SECTION:
+;example.com.			IN	A
+
+;; ANSWER SECTION:
+example.com.		86400	IN	A	172.16.1.20
+example.com.		86400	IN	RRSIG	A 13 2 86400 20261122141500 20261023141500 34390 example.com. lrFMpZUvD2gEFmdINfL67/udnHn1n0We4/ZGGbm5piBoglDQbRFydsNB HxDcTGNZQ6V+iGWktVZSVPbIxJ9s1Q==
+
+;; Query time: 212 msec
+;; SERVER: 172.16.2.10#53(172.16.2.10) (UDP)
+;; WHEN: Fri Oct 23 15:15:23 UTC 2026
+;; MSG SIZE  rcvd: 191
+

@@ -1,0 +1,27 @@
+
+; <<>> DiG 9.18.39-0ubuntu0.24.04.8-Ubuntu <<>> +dnssec nosuchname.example.com @172.16.3.30
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 63799
+;; flags: qr aa rd; QUERY: 1, ANSWER: 0, AUTHORITY: 6, ADDITIONAL: 1
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags: do; udp: 1232
+; COOKIE: bd3014c8880135ad010000006adb7fe307622ce711241c82 (good)
+;; QUESTION SECTION:
+;nosuchname.example.com.		IN	A
+
+;; AUTHORITY SECTION:
+example.com.		86400	IN	SOA	domain-ns.cs6008.local. admin.cs6008.local. 2026102001 3600 900 604800 86400
+example.com.		86400	IN	RRSIG	SOA 13 2 86400 20261122143845 20261023143845 24412 example.com. BxIDUdkJ5KhSNVIlNS/u5NyyilUhN4I34TTlyyJeHEotK1iRP6KlcSHT ILYrXHHQW4sltZPlhcuGbv1CAoyeYQ==
+example.com.		86400	IN	NSEC	db1.example.com. A NS SOA RRSIG NSEC DNSKEY
+example.com.		86400	IN	RRSIG	NSEC 13 2 86400 20261122143845 20261023143845 24412 example.com. +UNM5EI0leiWlvTHJrIIP4ysFkvSKhsriE8hqD6Zbq3N4/OB7r+/NVz9 jfw1O58utAx9hTNiOhqID/CCBpRz7A==
+mail.example.com.	86400	IN	NSEC	staging.example.com. A RRSIG NSEC
+mail.example.com.	86400	IN	RRSIG	NSEC 13 3 86400 20261122143845 20261023143845 24412 example.com. xsmT36MqROlHfsIXT50lPC+ji6vgWdsYWY8dn6eEg7U1OWao2VXAkP9l lrlHtg6ivT3ldeLWA7UZtew79as2Tg==
+
+;; Query time: 1 msec
+;; SERVER: 172.16.3.30#53(172.16.3.30) (UDP)
+;; WHEN: Fri Oct 23 15:40:19 UTC 2026
+;; MSG SIZE  rcvd: 548
+

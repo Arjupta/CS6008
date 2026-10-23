@@ -6,4 +6,3 @@
 */build/
 */*.signed
 resolver/trust-anchor.conf
-evidence/

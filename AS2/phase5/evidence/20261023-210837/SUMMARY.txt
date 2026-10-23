@@ -1,0 +1,16 @@
+Phase 5 evidence capture -- Fri Oct 23 09:10:36 PM IST 2026
+
+WALKABLE (example.com signed with NSEC):
+  verify (nonexistent name): ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 63799
+  walk: 8 names recovered via the NSEC chain (see walkable/walk.txt
+  for the full step-by-step list -- expect the apex, www, the domain-ns
+  glue name, and all 5 internal names: vpn, db1, mail, dev, staging).
+
+FIXED (example.com signed with NSEC3, same keys, nothing upstream changed):
+  verify (nonexistent name): ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 20975
+  (still NXDOMAIN with a valid NSEC3-based authenticated denial -- the fix
+  does not break ordinary negative responses, only enumeration.)
+  walk: 0 names recovered -- expect 0 (or 1 if the very first
+  NSEC query at the apex returns NODATA immediately, see fixed/walk.txt).
+
+Files: walkable/ and fixed/, each with verify_nxdomain.txt and walk.txt.
