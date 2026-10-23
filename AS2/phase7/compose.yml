@@ -1,0 +1,202 @@
+name: cs6008-dns-phase7
+
+networks:
+  client_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+  resolver_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.2.0/24
+  authoritative_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.3.0/24
+
+services:
+
+  client-strict:
+    # DoT-only: stubby's dns_transport_list is [GETDNS_TRANSPORT_TLS]
+    # and nothing else (see stubby.yml) -- there is no cleartext path
+    # anywhere in this container's resolution chain. See entrypoint.sh.
+    build: { context: ./client-image }
+    container_name: client-strict
+    hostname: client-strict
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net: { ipv4_address: 172.16.1.10 }
+    extra_hosts:
+      - "resolver.cs6008.local:172.16.2.10"
+    volumes:
+      - ./client-strict/entrypoint.sh:/entrypoint.sh:ro
+      - ./client-strict/stubby.yml:/root/stubby.yml:ro
+      - ./client-strict/ca.crt:/root/ca.crt:ro
+      - ./client-strict/strict-resolver.py:/root/strict-resolver.py:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    tty: true
+
+  client-permissive:
+    # Explicitly permits falling back to cleartext: stubby (DoT-only)
+    # listens on 127.0.0.1:5353; permissive-resolver.py is what actually
+    # answers /etc/resolv.conf's "nameserver 127.0.0.1" on port 53, and
+    # only drops to the resolver's plain port 53 if the DoT attempt
+    # fails. See entrypoint.sh and permissive-resolver.py.
+    build: { context: ./client-image }
+    container_name: client-permissive
+    hostname: client-permissive
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net: { ipv4_address: 172.16.1.11 }
+    extra_hosts:
+      - "resolver.cs6008.local:172.16.2.10"
+    volumes:
+      - ./client-permissive/entrypoint.sh:/entrypoint.sh:ro
+      - ./client-permissive/stubby.yml:/root/stubby.yml:ro
+      - ./client-permissive/ca.crt:/root/ca.crt:ro
+      - ./client-permissive/permissive-resolver.py:/root/permissive-resolver.py:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    tty: true
+
+  webserver:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: webserver
+    hostname: webserver
+    networks:
+      client_net: { ipv4_address: 172.16.1.20 }
+    volumes:
+      - ../phase1/webserver/entrypoint.sh:/entrypoint.sh:ro
+      - ../phase1/webserver/index.html:/var/www/index.html:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  rogue-web:
+    # Only reached by the bonus chained demo in capture_evidence.sh
+    # (7.4's "what does this still not protect" discussion) -- see
+    # README.
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: rogue-web
+    hostname: rogue-web
+    networks:
+      client_net: { ipv4_address: 172.16.1.30 }
+    volumes:
+      - ../phase6/rogue-web/entrypoint.sh:/entrypoint.sh:ro
+      - ../phase6/rogue-web/index.html:/var/www/index.html:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  edge-router:
+    # Baseline: always-on reply-side diversion for both clients, same
+    # mechanism as Phase 6 (feeds attack (i) and the bonus chained
+    # demo). set-attack.sh additionally toggles attack (ii)'s DNAT rule
+    # or attack (iii)'s DROP rule on demand -- see entrypoint.sh /
+    # set-attack.sh / capture_evidence.sh.
+    build: { context: ./edge-router }
+    container_name: edge-router
+    hostname: edge-router
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net:   { ipv4_address: 172.16.1.2 }
+      resolver_net: { ipv4_address: 172.16.2.2 }
+    volumes:
+      - ./edge-router/entrypoint.sh:/entrypoint.sh:ro
+      - ./edge-router/set-attack.sh:/root/set-attack.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [attacker]
+
+  core-router:
+    # Plain Phase 1 router -- authoritative<->resolver leg is completely
+    # untouched by this phase, no diversion needed here.
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: core-router
+    hostname: core-router
+    cap_add: [NET_ADMIN]
+    networks:
+      resolver_net:      { ipv4_address: 172.16.2.3 }
+      authoritative_net: { ipv4_address: 172.16.3.3 }
+    volumes:
+      - ../phase1/core-router/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  attacker:
+    # Same position as Phase 6 (client_net only, 172.16.1.100), reached
+    # by edge-router's always-on reply diversion for attack (i) and the
+    # bonus chained demo, and by its toggleable DNAT rule for attack
+    # (ii). See attacker/entrypoint.sh, corrupt.py, rogue_tls_server.py.
+    build: { context: ./attacker }
+    container_name: attacker
+    hostname: attacker
+    cap_add: [NET_ADMIN, NET_RAW]
+    networks:
+      client_net: { ipv4_address: 172.16.1.100 }
+    volumes:
+      - ./attacker/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  # --- reused from Phase 3/6: signed hierarchy, untouched by this phase ---
+
+  root-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: root-ns
+    hostname: root-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.10 }
+    volumes:
+      - ./root-ns/named.conf:/etc/bind/named.conf:ro
+      - ./root-ns/db.root.signed:/etc/bind/db.root.signed:ro
+      - ../phase1/root-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  tld-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: tld-ns
+    hostname: tld-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.20 }
+    volumes:
+      - ./tld-ns/named.conf:/etc/bind/named.conf:ro
+      - ./tld-ns/db.com.signed:/etc/bind/db.com.signed:ro
+      - ../phase1/tld-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  domain-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: domain-ns
+    hostname: domain-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.30 }
+    volumes:
+      - ./domain-ns/named.conf:/etc/bind/named.conf:ro
+      - ./domain-ns/db.example.com.signed:/etc/bind/db.example.com.signed:ro
+      - ../phase1/domain-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  resolver:
+    # Same validating resolver as Phase 3-6, now ALSO offering DoT on
+    # 853 with the PKI's real certificate -- see resolver/named.conf and
+    # make-pki.sh.
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: resolver
+    hostname: resolver
+    cap_add: [NET_ADMIN]
+    networks:
+      resolver_net: { ipv4_address: 172.16.2.10 }
+    volumes:
+      - ./resolver/named.conf:/etc/bind/named.conf:ro
+      - ./resolver/trust-anchor.conf:/etc/bind/trust-anchor.conf:ro
+      - ./resolver/certs/resolver.crt:/etc/bind/certs/resolver.crt:ro
+      - ./resolver/certs/resolver.key:/etc/bind/certs/resolver.key:ro
+      - ../phase1/resolver/db.root.hints:/etc/bind/db.root.hints:ro
+      - ../phase1/resolver/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [root-ns, tld-ns, domain-ns, edge-router, core-router]

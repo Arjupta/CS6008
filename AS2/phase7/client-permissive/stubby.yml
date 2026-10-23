@@ -1,0 +1,12 @@
+resolution_type: GETDNS_RESOLUTION_STUB
+dns_transport_list:
+  - GETDNS_TRANSPORT_TLS
+tls_authentication: GETDNS_AUTHENTICATION_REQUIRED
+round_robin_upstreams: 0
+listen_addresses:
+  - 127.0.0.1@5353
+tls_ca_file: /etc/stubby/ca.crt
+upstream_recursive_servers:
+  - address_data: 172.16.2.10
+    tls_auth_name: "resolver.cs6008.local"
+    tls_port: 853

@@ -1,0 +1,46 @@
+[permissive-resolver] listening on ('127.0.0.1', 53); DoT via stubby first (('127.0.0.1', 5353)), cleartext fallback PERMITTED (('172.16.2.10', 53))
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT
+[permissive-resolver] answered via cleartext-fallback
+[permissive-resolver] DoT attempt failed/timed out -- FALLING BACK TO CLEARTEXT

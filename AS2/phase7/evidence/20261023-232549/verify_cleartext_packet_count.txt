@@ -1,0 +1,1 @@
+udp/53 packet count during verify: 0 (expect 0 -- transport is DoT, no cleartext DNS)

@@ -1,0 +1,47 @@
+Phase 7 evidence capture -- Fri Oct 23 11:29:36 PM IST 2026
+
+[1] Verify (no attack): cleartext udp/53 packets seen = 0 (expect 0)
+  client-strict:     A=none http_code=000      (expect A=172.16.1.20, 200 -- real page, over DoT)
+  client-permissive: A=172.16.1.20 http_code=000  (expect A=172.16.1.20, 200 -- real page, over DoT, no fallback needed)
+
+[2] Attack (i) -- alter answer in transit (TLS payload byte-flip):
+  client-strict:     A=none http_code=000
+  client-permissive: A=172.16.1.20 http_code=000
+  expected: NEITHER lands as a forgery. TLS's AEAD integrity check
+  detects the corrupted ciphertext and the connection is torn down --
+  strict gets no answer (DoS only); permissive's stubby attempt also
+  fails the same way, so permissive-resolver.py falls back to cleartext
+  and gets the REAL answer (172.16.1.20), not a forged one, because
+  nothing is forging the cleartext leg in this attempt.
+
+[3] Attack (ii) -- impersonate the resolver with a rogue certificate:
+  client-strict:     A=none http_code=000
+  client-permissive: A=172.16.1.20 http_code=000
+  expected: NEITHER lands. Both clients' TLS stacks reject the rogue
+  cert (self-signed, untrusted CA) during the handshake -- see
+  attack_ii_attacker_log.txt for the rejected-handshake log. Strict gets
+  no answer; permissive falls back to cleartext and gets the REAL
+  answer, same reasoning as attack (i).
+
+[4] Attack (iii) -- deny the encrypted transport (block TCP 853):
+  client-strict:     A=none http_code=000
+  client-permissive: A=172.16.1.20 http_code=000
+  expected: strict gets NO answer at all (DoS -- it has nowhere else to
+  go). permissive falls back to cleartext and gets the REAL answer,
+  because -- in this attempt alone -- nothing is forging that cleartext
+  leg either.
+
+[BONUS, not one of the six required combos] Attack (iii) chained with
+the Phase 6 cleartext forger, permissive client only:
+  client-permissive: A=none http_code=000
+  expected: THIS one DOES land -- A=172.16.1.30 (rogue-web), 200. Denying
+  the encrypted transport forces the fallback permissive-resolver.py was
+  configured to use, and an attacker already positioned on that
+  cleartext leg (same technique as Phase 6, nothing new) can now forge
+  it. See permissive_resolver_fallback_log.txt for the "FALLING BACK TO
+  CLEARTEXT" line proving which path actually answered.
+
+Files: verify_*, attack_i_*, attack_ii_*, attack_iii_*, bonus_chained_*
+(each with _dig.txt/_curl.txt per client), verify_edge-router.pcap,
+attack_ii_attacker_log.txt, attack_i_attacker_log.txt,
+permissive_resolver_fallback_log.txt.
