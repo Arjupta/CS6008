@@ -1,0 +1,153 @@
+name: cs6008-dns-phase2
+
+networks:
+  client_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+  resolver_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.2.0/24
+  authoritative_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.3.0/24
+
+services:
+
+  # --- unchanged from Phase 1, configs reused directly ---------------------
+
+  client:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: client
+    hostname: client
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net: { ipv4_address: 172.16.1.10 }
+    volumes:
+      - ../phase1/client/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    tty: true
+
+  webserver:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: webserver
+    hostname: webserver
+    networks:
+      client_net: { ipv4_address: 172.16.1.20 }
+    volumes:
+      - ../phase1/webserver/entrypoint.sh:/entrypoint.sh:ro
+      - ../phase1/webserver/index.html:/var/www/index.html:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  edge-router:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: edge-router
+    hostname: edge-router
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net:   { ipv4_address: 172.16.1.2 }
+      resolver_net: { ipv4_address: 172.16.2.2 }
+    volumes:
+      - ../phase1/edge-router/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  resolver:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: resolver
+    hostname: resolver
+    cap_add: [NET_ADMIN]
+    networks:
+      resolver_net: { ipv4_address: 172.16.2.10 }
+    volumes:
+      - ../phase1/resolver/named.conf:/etc/bind/named.conf:ro
+      - ../phase1/resolver/db.root.hints:/etc/bind/db.root.hints:ro
+      - ../phase1/resolver/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [root-ns, tld-ns, domain-ns, edge-router, core-router]
+
+  root-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: root-ns
+    hostname: root-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.10 }
+    volumes:
+      - ../phase1/root-ns/named.conf:/etc/bind/named.conf:ro
+      - ../phase1/root-ns/db.root:/etc/bind/db.root:ro
+      - ../phase1/root-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  tld-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: tld-ns
+    hostname: tld-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.20 }
+    volumes:
+      - ../phase1/tld-ns/named.conf:/etc/bind/named.conf:ro
+      - ../phase1/tld-ns/db.com:/etc/bind/db.com:ro
+      - ../phase1/tld-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  domain-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: domain-ns
+    hostname: domain-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.30 }
+    volumes:
+      - ../phase1/domain-ns/named.conf:/etc/bind/named.conf:ro
+      - ../phase1/domain-ns/db.example.com:/etc/bind/db.example.com:ro
+      - ../phase1/domain-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  # --- changed / new for Phase 2 -------------------------------------------
+
+  core-router:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: core-router
+    hostname: core-router
+    cap_add: [NET_ADMIN, NET_RAW]
+    networks:
+      resolver_net:      { ipv4_address: 172.16.2.3 }
+      authoritative_net:  { ipv4_address: 172.16.3.3 }
+    volumes:
+      - ./core-router/entrypoint.sh:/entrypoint.sh:ro   # diversion route added here
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [attacker]
+
+  attacker:
+    build: { context: ./attacker }
+    container_name: attacker
+    hostname: attacker
+    cap_add: [NET_ADMIN, NET_RAW]
+    networks:
+      resolver_net: { ipv4_address: 172.16.2.100 }
+    volumes:
+      - ./attacker/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  rogue-web:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: rogue-web
+    hostname: rogue-web
+    networks:
+      client_net: { ipv4_address: 172.16.1.30 }
+    volumes:
+      - ./rogue-web/entrypoint.sh:/entrypoint.sh:ro
+      - ./rogue-web/index.html:/var/www/index.html:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
