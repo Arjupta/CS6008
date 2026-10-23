@@ -1,0 +1,160 @@
+name: cs6008-dns-phase5
+
+networks:
+  client_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+  resolver_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.2.0/24
+  authoritative_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.3.0/24
+
+services:
+
+  # --- unchanged from Phase 1, configs reused directly -----------------------
+  # (client/webserver aren't needed for the zone-walking attack itself --
+  # everything happens directly between the attacker and domain-ns -- but
+  # they're kept so the full Phase 3 baseline is still reproducible here,
+  # e.g. to re-run the ordinary `dig +dnssec example.com` verification.)
+
+  client:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: client
+    hostname: client
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net: { ipv4_address: 172.16.1.10 }
+    volumes:
+      - ../phase1/client/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    tty: true
+
+  webserver:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: webserver
+    hostname: webserver
+    networks:
+      client_net: { ipv4_address: 172.16.1.20 }
+    volumes:
+      - ../phase1/webserver/entrypoint.sh:/entrypoint.sh:ro
+      - ../phase1/webserver/index.html:/var/www/index.html:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  edge-router:
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: edge-router
+    hostname: edge-router
+    cap_add: [NET_ADMIN]
+    networks:
+      client_net:   { ipv4_address: 172.16.1.2 }
+      resolver_net: { ipv4_address: 172.16.2.2 }
+    volumes:
+      - ../phase1/edge-router/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  core-router:
+    # Plain Phase 1 router -- no diversion route needed. The zone walker
+    # isn't on-path and doesn't intercept anything; it just needs ordinary
+    # routed reachability to the authoritative subnet, which ip_forward
+    # alone already provides.
+    build: { context: ../common, dockerfile: Dockerfile.base }
+    container_name: core-router
+    hostname: core-router
+    cap_add: [NET_ADMIN]
+    networks:
+      resolver_net:      { ipv4_address: 172.16.2.3 }
+      authoritative_net:  { ipv4_address: 172.16.3.3 }
+    volumes:
+      - ../phase1/core-router/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
+  # --- new for Phase 5 --------------------------------------------------------
+
+  attacker:
+    # The zone walker (zonewalk.c): not an on-path interceptor, an ordinary
+    # (if hand-crafted) DNS client that queries domain-ns directly. See
+    # zonewalk.c's header comment and the README for the technique.
+    build: { context: ./attacker }
+    container_name: attacker
+    hostname: attacker
+    cap_add: [NET_ADMIN, NET_RAW]
+    networks:
+      resolver_net: { ipv4_address: 172.16.2.100 }
+    volumes:
+      - ./attacker/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  # --- reused from Phase 3: signed hierarchy + validating resolver -----------
+  # root-ns, tld-ns, domain-ns, resolver all get phase5-local named.conf and
+  # *.signed zone files -- produced by ./sign-zones.sh (walkable, NSEC) or
+  # ./resign-domain-ns-nsec3.sh (fixed, NSEC3 -- only touches domain-ns).
+  # Not committed to git; see .gitignore.
+
+  root-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: root-ns
+    hostname: root-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.10 }
+    volumes:
+      - ./root-ns/named.conf:/etc/bind/named.conf:ro
+      - ./root-ns/db.root.signed:/etc/bind/db.root.signed:ro
+      - ../phase1/root-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  tld-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: tld-ns
+    hostname: tld-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.20 }
+    volumes:
+      - ./tld-ns/named.conf:/etc/bind/named.conf:ro
+      - ./tld-ns/db.com.signed:/etc/bind/db.com.signed:ro
+      - ../phase1/tld-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  domain-ns:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: domain-ns
+    hostname: domain-ns
+    cap_add: [NET_ADMIN]
+    networks:
+      authoritative_net: { ipv4_address: 172.16.3.30 }
+    volumes:
+      - ./domain-ns/named.conf:/etc/bind/named.conf:ro
+      - ./domain-ns/db.example.com.signed:/etc/bind/db.example.com.signed:ro
+      - ../phase1/domain-ns/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [core-router]
+
+  resolver:
+    build: { context: ../common, dockerfile: Dockerfile.bind }
+    container_name: resolver
+    hostname: resolver
+    cap_add: [NET_ADMIN]
+    networks:
+      resolver_net: { ipv4_address: 172.16.2.10 }
+    volumes:
+      - ./resolver/named.conf:/etc/bind/named.conf:ro
+      - ./resolver/trust-anchor.conf:/etc/bind/trust-anchor.conf:ro
+      - ../phase1/resolver/db.root.hints:/etc/bind/db.root.hints:ro
+      - ../phase1/resolver/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    depends_on: [root-ns, tld-ns, domain-ns, edge-router, core-router]
