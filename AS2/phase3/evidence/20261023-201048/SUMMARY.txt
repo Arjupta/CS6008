@@ -1,0 +1,22 @@
+Phase 3 evidence capture — Fri Oct 23 08:11:28 PM IST 2026
+
+Baseline (DNSSEC validation, forging off):
+  dig:  ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 54781
+        flags: qr rd ra ad
+  delv: example.com.		86400	IN	RRSIG	A 13 2 86400 20261122131549 20261023131549 31900 example.com. yBU3Mxms6B8wOIzLZIblTJTR4nLejUhsMP93VlMndxu+XNRrzLytT4/a fK02BwU1KlDUtpA4PP0Qv3fE8hj31Q==
+
+Attack (same Phase 2 forged-rdata interceptor, forging on, resolver validates):
+  dig:  ;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 60340
+  curl: http_code=000
+http_code=(curl failed/timed out -- expected: DNS resolution failed)
+  attacker log (last lines, shows forging still attempted):
+    [relay] 172.16.3.20:53 -> 172.16.2.10:42338 qr=1 qd=1 an=4  (seen=194 relayed=194 forged=6)
+    [relay] 172.16.3.30:53 -> 172.16.2.10:42866 qr=1 qd=1 an=0  (seen=195 relayed=195 forged=6)
+    [relay] 172.16.3.20:53 -> 172.16.2.10:48280 qr=1 qd=1 an=4  (seen=196 relayed=196 forged=6)
+    [relay] 172.16.3.30:53 -> 172.16.2.10:49001 qr=1 qd=1 an=0  (seen=197 relayed=197 forged=6)
+    [relay] 172.16.3.30:53 -> 172.16.2.10:45773 qr=1 qd=1 an=0  (seen=198 relayed=198 forged=6)
+
+Files in this directory:
+  baseline_dig.txt, baseline_delv.txt, baseline.pcap  -- chain validates cleanly
+  attack_dig.txt, attack_curl.txt, attacker_log.txt, attack.pcap -- forged
+    answer rejected (SERVFAIL), attacker log shows the forge was attempted

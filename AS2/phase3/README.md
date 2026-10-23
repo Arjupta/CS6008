@@ -80,8 +80,18 @@ even though neither side is individually wrong. So after any re-run:
     # expect: EMPTY / SERVFAIL -- NOT 172.16.1.30. Check the rcode explicitly:
     docker exec client dig example.com @172.16.2.10 | grep -i status
     # expect: status: SERVFAIL
+
+    # For the HTTP-level check, do NOT use `curl --resolve` -- it skips DNS
+    # lookup entirely and connects straight to the IP you give it, so it
+    # "succeeds" even when DNS is correctly blocking the attack (it tells
+    # you nothing). The client's default /etc/resolv.conf points at
+    # Docker's own embedded DNS (127.0.0.11), not our lab resolver -- that's
+    # why every dig command above says `@172.16.2.10` explicitly. Point the
+    # client's real resolver at our resolver first, then let curl do an
+    # unforced lookup:
+    docker exec client sh -c 'echo "nameserver 172.16.2.10" > /etc/resolv.conf'
     docker exec client curl -s -o /dev/null -w "%{http_code}\n" --max-time 5 \
-      http://example.com --resolve example.com:80:172.16.1.30
+      http://example.com
     # expect: curl fails/times out resolving (no address), the client never
     # even reaches rogue-web, because the resolver itself refused to hand out
     # the forged record
@@ -99,13 +109,52 @@ as Bogus -- rejecting it rather than falling back to an unsigned answer
 
 ## Capturing evidence
 
+    ./capture_evidence.sh
+
 Same approach as Phase 2 -- `tcpdump` on `core-router` for the resolver↔
 authoritative exchange, `docker logs attacker` to show forging is still
 being attempted (`forged` counter still increments -- the attack is
 *attempted*, just rejected downstream), and the `dig`/`delv` output above.
-A `capture_evidence.sh` matching Phase 2's can be added once the base
-sequence above is confirmed working on your setup -- say the word and I'll
-write it against your real evidence like we did for Phase 2.
+Writes everything to a timestamped `evidence/<timestamp>/` directory
+(`.gitignore`'d, not committed): baseline dig/delv output and pcap, attack
+dig/curl output, attacker log, and pcap, plus a `SUMMARY.txt`. Leaves
+forging off and the resolver cache flushed when it finishes, so the
+environment is back in its clean baseline state afterward.
+
+## Known issue found and fixed: out-of-bailiwick glue stripped by signing
+
+Earlier versions of `db.root`, `db.com`, and `db.example.com` named every
+nameserver under a shared, fictional `cs6008.local` suffix (e.g.
+`tld-ns.cs6008.local.`, `domain-ns.cs6008.local.`) instead of under the
+zone each one actually serves. Those names are "out-of-bailiwick" relative
+to the delegations they were glue for: `tld-ns.cs6008.local.` isn't a
+subdomain of `com.`, and `domain-ns.cs6008.local.` isn't a subdomain of
+`example.com.`.
+
+Plain, unsigned BIND (Phases 1-2) tolerates this -- it logs a warning
+(`ignoring out-of-zone data (...)`) but still serves the glue A records as
+literal zone content. `dnssec-signzone`, however, actually drops
+out-of-bailiwick data from the *signed* zone it produces. The effect:
+`tld-ns`'s signed referral for `example.com` carried the NS record but no
+glue, forcing the resolver to resolve `domain-ns.cs6008.local` on its own --
+which fails outright, since `cs6008.local` was never delegated from `.`
+anywhere in this hierarchy. Resolution broke below the root, which masked
+whether DNSSEC validation itself was doing anything at all (you can't test
+"does the resolver reject a bad signature" when it can't even reach the
+authoritative server to get an answer, forged or not).
+
+**Fix**: renamed every nameserver to an in-bailiwick name relative to the
+zone it's glue for -- `tld-ns.com.` (under `com.`, delegated by `root-ns`)
+and `domain-ns.example.com.` (under `example.com.`, delegated by `tld-ns`).
+`root-ns`'s own apex name (`root-ns.cs6008.local.`) was left unchanged: the
+root zone's authority covers the entire namespace, so nothing is
+out-of-bailiwick relative to it -- confirmed by the fact that root-ns never
+logged the warning and its glue was never stripped. After the fix, both
+`tld-ns` and `domain-ns` stopped logging the warning, and
+`dig example.com @172.16.2.10` (no `+cd`) returns `NOERROR` with the `ad`
+flag set, confirming full chain-of-trust validation -- and the attack test
+below now correctly returns `SERVFAIL` on the forged answer, which it could
+not have reliably demonstrated before this fix.
 
 ## Report notes (for `report.pdf` §3.4)
 

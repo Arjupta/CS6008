@@ -1,0 +1,3 @@
+; fully validated
+example.com.		86400	IN	A	172.16.1.20
+example.com.		86400	IN	RRSIG	A 13 2 86400 20261122131549 20261023131549 31900 example.com. yBU3Mxms6B8wOIzLZIblTJTR4nLejUhsMP93VlMndxu+XNRrzLytT4/a fK02BwU1KlDUtpA4PP0Qv3fE8hj31Q==
